@@ -2,6 +2,7 @@
 // printed by a headless browser — the app chrome is already .no-print, so what
 // comes out is the sheet and nothing else.
 import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth";
 import { originOf, pdfFilename, renderPdf } from "@/lib/pdf";
 import { prisma } from "@/lib/prisma";
 
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(req: Request, ctx: RouteContext<"/api/quotations/[id]/pdf">) {
+  await requireUser();
   const { id } = await ctx.params;
 
   const quotation = await prisma.quotation.findUnique({
@@ -19,7 +21,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/quotations/[id]/
   });
   if (!quotation) notFound();
 
-  const pdf = await renderPdf(`${originOf(req)}/quotations/${id}`);
+  const pdf = await renderPdf(`${originOf(req)}/quotations/${id}`, req.headers.get("cookie"));
 
   return new Response(pdf as BodyInit, {
     headers: {

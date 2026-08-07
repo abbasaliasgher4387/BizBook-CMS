@@ -9,10 +9,9 @@ export const dynamic = "force-dynamic";
 const ROW = "grid min-w-[42rem] grid-cols-[9rem_1fr_7.5rem_5.5rem_9rem] items-center gap-3 px-3";
 
 export default async function Home() {
-  const [companies, customers, products, quotations, recent] = await Promise.all([
+  const [companies, customers, quotations, recent] = await Promise.all([
     prisma.company.count(),
     prisma.customer.count(),
-    prisma.product.count(),
     prisma.quotation.count(),
     prisma.quotation.findMany({
       take: 8,
@@ -32,11 +31,12 @@ export default async function Home() {
         </Link>
       </PageHeader>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* No Products tile while Products is out of the sidebar — a tile is the
+          only other door to it, and one door left open is worse than none. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Stat href="/quotations" label="Quotations" value={quotations} />
         <Stat href="/companies" label="Companies" value={companies} />
         <Stat href="/customers" label="Customers" value={customers} />
-        <Stat href="/products" label="Products" value={products} />
       </div>
 
       {companies === 0 ? (

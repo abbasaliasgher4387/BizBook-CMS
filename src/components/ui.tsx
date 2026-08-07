@@ -35,6 +35,21 @@ export const th = "px-3 py-2 text-left text-[10.5px] font-semibold uppercase tra
 export const td = "px-3 py-2 align-middle";
 export const tr = "border-b border-line-2 last:border-0 hover:bg-canvas/50";
 
+/** A ruled sheet — the thing this software exists to produce. Sized by the
+    caller, because the sidebar wears it small and the login screen does not. */
+export function BrandMark({ className = "h-7 w-7" }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`flex shrink-0 flex-col justify-center gap-[3px] rounded-[5px] border border-rail-line px-[5px] ${className}`}
+    >
+      <i className="h-[2px] rounded-full bg-accent-bright" />
+      <i className="h-[2px] w-3/4 rounded-full bg-rail-fg" />
+      <i className="h-[2px] w-1/2 rounded-full bg-rail-fg/50" />
+    </span>
+  );
+}
+
 export function PageHeader({
   title,
   subtitle,

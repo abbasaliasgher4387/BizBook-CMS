@@ -21,8 +21,6 @@ export type QuotationFormValues = {
   status: string;
   poNumber: string;
   dcNumber: string;
-  gstPercent: string;
-  cartage: string;
   notes: string;
   terms: string;
   items: ItemValues[];
@@ -66,15 +64,13 @@ export default function QuotationForm({
   submitLabel: string;
 }) {
   const [items, setItems] = useState<ItemValues[]>(values.items.length ? values.items : [emptyItem]);
-  const [gstPercent, setGstPercent] = useState(values.gstPercent);
-  const [cartage, setCartage] = useState(values.cartage);
 
   const isEdit = Boolean(values.id);
 
   // Same arithmetic as the server action, so what is shown here is what is saved.
+  // A quotation is the lines and nothing else — GST and cartage belong to a bill,
+  // so they are not asked for here and save as 0.
   const subtotal = round2(items.reduce((sum, it) => sum + Number(it.quantity || 0) * Number(it.rate || 0), 0));
-  const gstAmount = round2((subtotal * Number(gstPercent || 0)) / 100);
-  const total = round2(subtotal + gstAmount + round2(Number(cartage || 0)));
 
   function patch(index: number, changes: Partial<ItemValues>) {
     setItems((rows) => rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
@@ -271,58 +267,13 @@ export default function QuotationForm({
           </div>
         </Panel>
 
-        <Panel title="Totals">
-          <dl className="space-y-2 p-4 text-[13px]">
+        <Panel title="Total">
+          <dl className="p-4 text-[13px]">
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-ink-2">Subtotal</dt>
-              <dd className="tnum font-medium">{money(subtotal)}</dd>
+              <dt className="text-[14px] font-semibold">Subtotal</dt>
+              <dd className="tnum text-[16px] font-semibold">{money(subtotal)}</dd>
             </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-ink-2">
-                <label htmlFor="gstPercent">GST %</label>
-                <span className="ml-1 text-ink-3">(0 = not printed)</span>
-              </dt>
-              <dd>
-                <input
-                  id="gstPercent"
-                  name="gstPercent"
-                  type="number"
-                  step="0.01"
-                  className={`${inputClass} tnum w-24 text-right`}
-                  value={gstPercent}
-                  onChange={(e) => setGstPercent(e.target.value)}
-                />
-              </dd>
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-ink-2">GST amount</dt>
-              <dd className="tnum">{money(gstAmount)}</dd>
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-ink-2">
-                <label htmlFor="cartage">Cartage</label>
-                <span className="ml-1 text-ink-3">(0 = not printed)</span>
-              </dt>
-              <dd>
-                <input
-                  id="cartage"
-                  name="cartage"
-                  type="number"
-                  step="0.01"
-                  className={`${inputClass} tnum w-24 text-right`}
-                  value={cartage}
-                  onChange={(e) => setCartage(e.target.value)}
-                />
-              </dd>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 border-t border-line pt-2.5">
-              <dt className="text-[14px] font-semibold">Total</dt>
-              <dd className="tnum text-[16px] font-semibold">{money(total)}</dd>
-            </div>
+            <dd className="mt-1 text-[11.5px] text-ink-3">The lines added up. Nothing else is added.</dd>
           </dl>
         </Panel>
       </div>

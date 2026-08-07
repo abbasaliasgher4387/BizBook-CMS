@@ -242,6 +242,15 @@ function readItems(fd: FormData): ItemRow[] {
   return rows;
 }
 
+/**
+ * A quotation's total is its lines and nothing else.
+ *
+ * The GST and cartage columns stay in the schema for the Bills module, which is
+ * where the client actually charges them — the quotation form no longer asks, so
+ * `num()` reads the absent fields as 0 and total comes out equal to subtotal.
+ * Re-saving an older quotation that still carries GST therefore clears it, which
+ * is the intent: those figures do not belong on a quotation.
+ */
 function readTotals(fd: FormData, items: ItemRow[]) {
   const subtotal = round2(items.reduce((sum, it) => sum + it.amount, 0));
   const gstPercent = round2(num(fd.get("gstPercent")));

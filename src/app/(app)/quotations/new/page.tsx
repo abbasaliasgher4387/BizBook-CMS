@@ -62,8 +62,6 @@ export default async function NewQuotationPage() {
           status: "DRAFT",
           poNumber: "",
           dcNumber: "",
-          gstPercent: "0",
-          cartage: "0",
           notes: "",
           terms: "",
           items: [],

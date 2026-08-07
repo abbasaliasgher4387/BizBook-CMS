@@ -15,6 +15,31 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  ADMIN
+  USER
+}
+
+// Who may sign in. The office is small and everyone works on the same books, so
+// there are exactly two levels: ADMIN, who also manages the accounts, and USER,
+// who does the day's work. Per-module permissions can be added when someone
+// actually asks for them.
+model User {
+  id       String @id @default(cuid())
+  // Stored lowercase — "Administrator" and "administrator" are one account.
+  username String @unique
+  name     String?
+  // scrypt, "salt:key" in hex. See src/lib/auth.ts.
+  passwordHash String
+  role         Role    @default(USER)
+  // Switched off rather than deleted, so an account can be revoked without
+  // losing the record that it existed.
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // One of the client's registered companies. More can be added any time.
 model Company {
   id   String @id @default(cuid())

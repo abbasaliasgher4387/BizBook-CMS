@@ -47,8 +47,6 @@ export default async function EditQuotationPage(props: PageProps<"/quotations/[i
           status: quotation.status,
           poNumber: quotation.poNumber ?? "",
           dcNumber: quotation.dcNumber ?? "",
-          gstPercent: String(Number(quotation.gstPercent)),
-          cartage: String(Number(quotation.cartage)),
           notes: quotation.notes ?? "",
           terms: quotation.terms ?? "",
           items: quotation.items.map((it) => ({

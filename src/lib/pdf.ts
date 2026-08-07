@@ -27,8 +27,15 @@ async function localExecutable(): Promise<string> {
   return found;
 }
 
-/** Renders a page of this app to an A4 PDF. `url` must be absolute. */
-export async function renderPdf(url: string): Promise<Uint8Array> {
+/**
+ * Renders a page of this app to an A4 PDF. `url` must be absolute.
+ *
+ * `cookie` is the Cookie header of the request that asked for the download. The
+ * pages being printed sit behind the sign-in guard, so without it the headless
+ * browser is a stranger and every PDF comes out as the login screen. Passing it
+ * on also means a download is rendered as — and only as — whoever asked for it.
+ */
+export async function renderPdf(url: string, cookie?: string | null): Promise<Uint8Array> {
   const onVercel = Boolean(process.env.VERCEL);
 
   const browser = await puppeteer.launch(
@@ -39,6 +46,7 @@ export async function renderPdf(url: string): Promise<Uint8Array> {
 
   try {
     const page = await browser.newPage();
+    if (cookie) await page.setExtraHTTPHeaders({ cookie });
     // networkidle0 so the letterhead webfonts have finished loading — without
     // it the first PDF after a cold start comes out in a fallback face.
     await page.goto(url, { waitUntil: "networkidle0", timeout: 30_000 });

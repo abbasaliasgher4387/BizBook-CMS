@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bizbook
 
-## Getting Started
+Quotations for a Karachi supplier that trades under seven registered companies.
+Each company prints on its own letterhead design; everything else — customers,
+products, numbering — is shared. Next.js 16, Prisma 7, PostgreSQL.
 
-First, run the development server:
+## Running it locally
+
+Development runs against Postgres **on this machine**, not Supabase. Supabase is
+a free nano instance in Singapore and the sockets it drops mid-page make local
+work miserable; the local database is also safe to wipe.
 
 ```bash
+npm install
+cp .env.example .env          # then fill in DATABASE_URL and AUTH_SECRET
+npx prisma migrate deploy     # create the tables
+npx prisma db seed            # demo companies, customers, products, quotations
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sign in with `administrator` / `admin123` — that account is created on the first
+visit to `/login` when the user table is empty, and never again.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Postgres is not a Windows service here
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+It does not start with the machine. If a page says *"Can't reach database server
+at localhost:5432"*, start it:
 
-## Learn More
+```powershell
+& 'C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe' -D 'C:\Program Files\PostgreSQL\18\data' -w start
+```
 
-To learn more about Next.js, take a look at the following resources:
+Look at the data with **pgAdmin 4** (installed alongside Postgres), or with
+`npx prisma studio`, which opens the same rows on http://localhost:5555 without
+any SQL.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Environment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| File | Read by | Points at |
+|---|---|---|
+| `.env` | `next dev` **and every `prisma` CLI command** | local `bizbook_dev` |
+| `.env.production` | `next build` / `next start` | Supabase |
 
-## Deploy on Vercel
+Both are gitignored. The Prisma CLI never reads `.env.production`, so a command
+meant for the live database has to say so for that one command:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```powershell
+$env:DATABASE_URL="<supabase-uri>"; npx prisma migrate deploy; $env:DATABASE_URL=$null
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deploying
+
+Vercel builds with `npm run build`, which runs `prisma generate` first — the
+generated client lives in `/generated` and is deliberately not committed.
+
+Set `DATABASE_URL` and `AUTH_SECRET` in the Vercel project's environment
+variables. Without `AUTH_SECRET` the app refuses to start in production rather
+than sign cookies with a value anyone could read off GitHub.

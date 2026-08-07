@@ -64,6 +64,18 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* The sign-in screen's ground. The app's whole idea is a ruled sheet, so that
+   is what it stands on: faint rules, a wash of white where the card sits so the
+   lines never fight the form, and one breath of the house green from the top.
+   Three gradients — no image, nothing to load, nothing to keep in sync. */
+.paper-bg {
+  background-color: var(--canvas);
+  background-image:
+    radial-gradient(64% 46% at 50% 44%, rgb(255 255 255 / 0.92), rgb(255 255 255 / 0) 72%),
+    radial-gradient(96% 58% at 50% -4%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 68%),
+    repeating-linear-gradient(to bottom, transparent 0 27px, var(--line-2) 27px 28px);
+}
+
 /* One focus treatment for every control in the app. */
 :where(a, button, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--accent);
