@@ -1,0 +1,93 @@
+import { deleteCustomer, saveCustomer } from "@/app/actions";
+import { EmptyState, Field, PageHeader, btn, fieldLabel, textareaClass } from "@/components/ui";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+export default async function CustomersPage() {
+  const customers = await prisma.customer.findMany({ orderBy: { name: "asc" } });
+
+  return (
+    <>
+      <PageHeader title="Customers" subtitle="One shared list. Every company quotes from it." />
+
+      {customers.length > 0 && (
+        <div className="divide-y divide-line-2 overflow-hidden rounded-md border border-line bg-paper">
+          {customers.map((c) => (
+            <details key={c.id} className="group">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 transition-colors hover:bg-canvas/60 [&::-webkit-details-marker]:hidden">
+                <span className="text-[13px] font-medium">{c.name}</span>
+                <span className="text-[12px] text-ink-2">{[c.contactPerson, c.phone].filter(Boolean).join(" · ")}</span>
+                <span className="ml-auto text-[12px] text-ink-3 group-open:hidden">Edit</span>
+                <span className="ml-auto hidden text-[12px] text-ink-3 group-open:inline">Close</span>
+              </summary>
+              <div className="border-t border-line-2 bg-canvas/40 p-4">
+                <CustomerForm customer={c} />
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+
+      {customers.length === 0 && <EmptyState>No customers yet. Add the first one below.</EmptyState>}
+
+      <details
+        open={customers.length === 0}
+        className="group mt-4 overflow-hidden rounded-md border border-dashed border-line bg-paper"
+      >
+        <summary className="cursor-pointer list-none px-3 py-2.5 text-[13px] font-medium text-ink-2 transition-colors hover:bg-canvas/60 [&::-webkit-details-marker]:hidden">
+          <span className="group-open:hidden">Add a customer</span>
+          <span className="hidden group-open:inline">New customer</span>
+        </summary>
+        <div className="border-t border-line-2 bg-canvas/40 p-4">
+          <CustomerForm customer={null} />
+        </div>
+      </details>
+    </>
+  );
+}
+
+type Customer = Awaited<ReturnType<typeof prisma.customer.findMany>>[number];
+
+function CustomerForm({ customer }: { customer: Customer | null }) {
+  // Delete is its own form so the two actions never share a submit; the save
+  // button reaches back into the edit form by id — plain HTML, no nesting.
+  const formId = customer ? `customer-${customer.id}` : "customer-new";
+
+  // Capped: a field wider than the value it holds is harder to read, not easier.
+  return (
+    <div className="max-w-3xl space-y-3.5">
+      <form id={formId} action={saveCustomer} className="space-y-3.5">
+        {customer && <input type="hidden" name="id" value={customer.id} />}
+
+        <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+          <Field label="Customer name" name="name" required defaultValue={customer?.name} />
+          <Field label="Contact person" name="contactPerson" defaultValue={customer?.contactPerson} />
+          <Field label="Phone" name="phone" defaultValue={customer?.phone} />
+          <Field label="Email" name="email" type="email" defaultValue={customer?.email} />
+          <Field label="NTN" name="ntn" defaultValue={customer?.ntn} />
+          <Field label="GST number" name="gstNumber" defaultValue={customer?.gstNumber} />
+        </div>
+
+        <label className="block">
+          <span className={fieldLabel}>Address</span>
+          <textarea name="address" rows={2} className={textareaClass} defaultValue={customer?.address ?? ""} />
+        </label>
+      </form>
+
+      <div className="flex items-center justify-between gap-3 border-t border-line pt-3.5">
+        {customer ? (
+          <form action={deleteCustomer}>
+            <input type="hidden" name="id" value={customer.id} />
+            <button className={btn.danger}>Delete customer</button>
+          </form>
+        ) : (
+          <span />
+        )}
+        <button form={formId} className={btn.primary}>
+          {customer ? "Save changes" : "Create customer"}
+        </button>
+      </div>
+    </div>
+  );
+}

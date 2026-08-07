@@ -1,0 +1,150 @@
+// Phase 1: quotations only. No chart of accounts, no double entry, no FBR.
+// Money is always Decimal — never Float. Float loses paisa.
+//
+// Field set comes from the client's own bill formats (useful files/Bill
+// Format_121650.xlsx) and letterheads (useful files/Letterheads.pdf). Every
+// company gets the same fields; only the printed design differs.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+// Prisma 7: the connection URL lives in prisma.config.ts, not here.
+datasource db {
+  provider = "postgresql"
+}
+
+// One of the client's registered companies. More can be added any time.
+model Company {
+  id   String @id @default(cuid())
+  name String
+  // Prefix used in this company's quotation numbers, e.g. "SAMS" -> SAMS-0001
+  code String @unique
+
+  // Letterhead content. Each company's real letterhead carries a different
+  // subset — blank fields simply do not print.
+  tagline    String? // "Deals in all kind of hardware items, ..."
+  headerNote String? // AMS prints "Insha Allah" in the top corner
+  address    String?
+  phone      String?
+  email      String?
+  ntn        String?
+  strn       String?
+  gstNumber  String?
+  // Real logo file dropped into /public, e.g. "/logos/sams.png". When empty the
+  // template draws its own CSS/SVG mark instead.
+  logoUrl    String?
+
+  // Which quotation design this company prints on.
+  // Keys live in src/lib/quotation-templates/index.ts.
+  templateKey String @default("sams")
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotations Quotation[]
+}
+
+// Shared across all companies — the same customer can buy from any of them.
+model Customer {
+  id            String   @id @default(cuid())
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  ntn           String?
+  gstNumber     String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  quotations Quotation[]
+
+  @@index([name])
+}
+
+// Shared across all companies.
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  code        String?  @unique
+  unit        String   @default("pcs") // pcs, kg, ft, sheet, ...
+  defaultRate Decimal  @db.Decimal(14, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items QuotationItem[]
+
+  @@index([name])
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Quotation {
+  id String @id @default(cuid())
+  // Sequence within its own company, zero padded: "0001". The company code is
+  // printed separately by the template, so it is not repeated here.
+  number     String
+  companyId  String
+  customerId String
+  date       DateTime        @default(now())
+  validUntil DateTime?
+  status     QuotationStatus @default(DRAFT)
+
+  // The client's bills carry these two references; both are optional because
+  // not every company's format prints them.
+  poNumber String? // "PO # 10102682/2025"
+  dcNumber String? // delivery challan
+
+  notes String?
+  terms String?
+
+  // Stored, not computed on read: a quotation is a record of what was actually
+  // quoted, so later rate or GST changes must not rewrite history.
+  subtotal   Decimal @default(0) @db.Decimal(14, 2)
+  gstPercent Decimal @default(0) @db.Decimal(5, 2) // 0 = no GST line on the document
+  gstAmount  Decimal @default(0) @db.Decimal(14, 2)
+  cartage    Decimal @default(0) @db.Decimal(14, 2) // freight, 0 = hidden
+  total      Decimal @default(0) @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company  Company         @relation(fields: [companyId], references: [id])
+  customer Customer        @relation(fields: [customerId], references: [id])
+  items    QuotationItem[]
+
+  @@unique([companyId, number])
+  @@index([companyId, date])
+  @@index([customerId])
+}
+
+model QuotationItem {
+  id          String  @id @default(cuid())
+  quotationId String
+  // Optional: a line can be typed by hand for something not in the catalogue.
+  productId   String?
+  // Snapshot of the name/unit/rate at quoting time — renaming a product later
+  // must not change what an old quotation says.
+  description String
+  unit        String
+  quantity    Decimal @db.Decimal(14, 3)
+  rate        Decimal @db.Decimal(14, 2)
+  amount      Decimal @db.Decimal(14, 2)
+  sortOrder   Int     @default(0)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id])
+
+  @@index([quotationId])
+}
