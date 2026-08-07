@@ -54,28 +54,41 @@ export default function Bizway({ doc }: TemplateProps) {
         </span>
       </div>
 
-      {/* ---- meta strip, also centred ---- */}
-      <div className="mt-5 flex flex-wrap justify-center gap-x-8 gap-y-1 text-[9.5pt]">
-        <Chip label="Quotation #" value={`${company.code}-${doc.number}`} />
-        <Chip label="Date" value={shortDate(doc.date)} />
-        <Chip label="Valid Until" value={shortDate(doc.validUntil)} />
-        {doc.poNumber && <Chip label="PO #" value={doc.poNumber} />}
-        {doc.dcNumber && <Chip label="DC #" value={doc.dcNumber} />}
-      </div>
+      {/* ---- buyer on the left, the document's own details boxed on the right.
+             Two panels side by side rather than a stack: this is what keeps the
+             sheet from reading like the other designs at a glance. ---- */}
+      <section className="mt-5 grid grid-cols-[1fr_74mm] items-start gap-5 break-inside-avoid">
+        <div className="border border-[#dbe3d5]">
+          <p
+            className="px-3 py-1 text-[8pt] font-bold uppercase tracking-[0.2em] text-white"
+            style={{ backgroundColor: CHARCOAL, fontFamily: montserrat.style.fontFamily }}
+          >
+            Buyer
+          </p>
+          <div className="bg-[#f4faf0] px-3 py-2">
+            <p className="text-[12.5pt] font-bold leading-tight">{customer.name}</p>
+            <p className="mt-0.5 text-[9.5pt] leading-snug text-[#4a5155]">
+              {join([customer.contactPerson, customer.address, customer.phone, customer.email])}
+            </p>
+            {customer.ntn && <p className="text-[9.5pt] text-[#4a5155]">NTN: {customer.ntn}</p>}
+          </div>
+        </div>
 
-      <section className="mt-6 border-l-4 bg-[#f4faf0] px-4 py-3" style={{ borderColor: GREEN }}>
-        <p className="text-[8pt] font-bold uppercase tracking-[0.2em]" style={{ color: GREEN }}>Buyer</p>
-        <p className="text-[12.5pt] font-bold">{customer.name}</p>
-        <p className="text-[9.5pt] text-[#4a5155]">
-          {join([customer.contactPerson, customer.address, customer.phone, customer.email])}
-        </p>
-        {customer.ntn && <p className="text-[9.5pt] text-[#4a5155]">NTN: {customer.ntn}</p>}
+        <table className="w-full border-collapse text-[9.5pt]">
+          <tbody>
+            <Meta label="Quotation #" value={`${company.code}-${doc.number}`} accent />
+            <Meta label="Date" value={shortDate(doc.date)} />
+            <Meta label="Valid Until" value={shortDate(doc.validUntil)} />
+            {doc.poNumber && <Meta label="PO #" value={doc.poNumber} />}
+            {doc.dcNumber && <Meta label="DC #" value={doc.dcNumber} />}
+          </tbody>
+        </table>
       </section>
 
       {/* ---- items: dark header, zebra rows, no vertical rules ---- */}
       <table className="mt-6 w-full border-collapse text-[10pt]">
         <thead>
-          <tr style={{ backgroundColor: CHARCOAL, color: "#fff" }}>
+          <tr style={{ backgroundColor: CHARCOAL, color: "#fff", fontFamily: montserrat.style.fontFamily }}>
             <th className="w-[11mm] px-2 py-2 text-center text-[8.5pt] font-bold uppercase tracking-wider">S.No</th>
             <th className="px-2 py-2 text-left text-[8.5pt] font-bold uppercase tracking-wider">Description</th>
             <th className="w-[20mm] px-2 py-2 text-right text-[8.5pt] font-bold uppercase tracking-wider">Qty</th>
@@ -99,23 +112,11 @@ export default function Bizway({ doc }: TemplateProps) {
       </table>
       <div className="h-[2px] w-full" style={{ backgroundColor: GREEN }} />
 
-      <div className="mt-4 flex justify-end break-inside-avoid">
-        <div className="w-[80mm] text-[10pt]">
-          {totals.map((t) => (
-            <div
-              key={t.label}
-              className={`flex justify-between px-3 py-1.5 ${t.strong ? "mt-1 text-white" : "border-b border-[#e3e8e0]"}`}
-              style={t.strong ? { backgroundColor: GREEN } : undefined}
-            >
-              <span className={t.strong ? "font-bold uppercase tracking-wider" : "text-[#5a6165]"}>{t.label}</span>
-              <span className={t.strong ? "text-[12pt] font-extrabold" : ""}>{money(t.value)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {(doc.notes || doc.terms) && (
-        <section className="mt-6 grid grid-cols-2 gap-6 break-inside-avoid text-[9pt] text-[#4a5155]">
+      {/* ---- the lower half reads across, not down: what the buyer should know
+             on the left, what they owe on the right, both starting at the same
+             line. The signature then closes the right column. ---- */}
+      <div className="mt-4 grid grid-cols-[1fr_80mm] items-start gap-6 break-inside-avoid">
+        <div className="space-y-2 text-[9pt] text-[#4a5155]">
           {doc.notes && (
             <div>
               <p className="font-bold uppercase tracking-wider" style={{ color: GREEN }}>Notes</p>
@@ -128,12 +129,33 @@ export default function Bizway({ doc }: TemplateProps) {
               <p className="whitespace-pre-line">{doc.terms}</p>
             </div>
           )}
-        </section>
-      )}
+        </div>
 
-      <div className="mt-14 flex justify-end break-inside-avoid">
-        <div className="w-[62mm] border-t-2 pt-1 text-center text-[9.5pt] font-bold" style={{ borderColor: CHARCOAL }}>
-          For {company.name}
+        <div>
+          <div className="border border-[#dbe3d5] text-[10pt]">
+            {totals.map((t) => (
+              <div
+                key={t.label}
+                className={`flex justify-between px-3 py-1.5 ${t.strong ? "text-white" : "border-b border-[#e3e8e0]"}`}
+                style={t.strong ? { backgroundColor: GREEN } : undefined}
+              >
+                <span
+                  className={t.strong ? "font-bold uppercase tracking-wider" : "text-[#5a6165]"}
+                  style={t.strong ? { fontFamily: montserrat.style.fontFamily } : undefined}
+                >
+                  {t.label}
+                </span>
+                <span className={t.strong ? "text-[12pt] font-extrabold" : ""}>{money(t.value)}</span>
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="mt-16 border-t-2 pt-1 text-center text-[9.5pt] font-bold"
+            style={{ borderColor: CHARCOAL }}
+          >
+            For {company.name}
+          </div>
         </div>
       </div>
 
@@ -150,11 +172,19 @@ export default function Bizway({ doc }: TemplateProps) {
   );
 }
 
-function Chip({ label, value }: { label: string; value: string }) {
+/** One row of the boxed detail table: tinted label cell, plain value cell. */
+function Meta({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <span>
-      <span className="text-[#7b8388]">{label}: </span>
-      <span className="font-semibold">{value}</span>
-    </span>
+    <tr>
+      <td className="w-[26mm] border border-[#dbe3d5] bg-[#f4faf0] px-2 py-1 font-semibold text-[#5a6165]">
+        {label}
+      </td>
+      <td
+        className={`border border-[#dbe3d5] px-2 py-1 font-bold ${accent ? "text-[10.5pt]" : ""}`}
+        style={accent ? { color: GREEN } : undefined}
+      >
+        {value}
+      </td>
+    </tr>
   );
 }

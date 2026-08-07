@@ -26,7 +26,7 @@ export default async function TemplatesPage() {
         <Link href="/companies" className={btn.ghost}>
           Companies
         </Link>
-        <DownloadPdf href="/api/designs/pdf" fileName="quotation-designs.pdf" label="Download all as PDF" />
+        <DownloadPdf href="/api/designs/pdf" fileName="quotation-designs.pdf" />
       </PageHeader>
 
       <div className="grid gap-6 lg:grid-cols-2">

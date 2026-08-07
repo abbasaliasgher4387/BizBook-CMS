@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, DocNumber, EmptyState, PageHeader, btn, sectionLabel } from "@/components/ui";
+import { Badge, EmptyState, PageHeader, btn, sectionLabel } from "@/components/ui";
 import { money, shortDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
@@ -18,7 +18,7 @@ export default async function Home() {
       take: 8,
       orderBy: { createdAt: "desc" },
       include: {
-        company: { select: { code: true, templateKey: true, logoUrl: true } },
+        company: { select: { code: true } },
         customer: { select: { name: true } },
       },
     }),
@@ -91,12 +91,9 @@ export default async function Home() {
                     href={`/quotations/${q.id}`}
                     className={`${ROW} py-2.5 transition-colors hover:bg-canvas/60`}
                   >
-                    <DocNumber
-                      code={q.company.code}
-                      number={q.number}
-                      templateKey={q.company.templateKey}
-                      logoUrl={q.company.logoUrl}
-                    />
+                    <span className="tnum text-[13px] font-medium">
+                      {q.company.code}-{q.number}
+                    </span>
                     <span className="truncate text-[13px]">{q.customer.name}</span>
                     <span className="tnum text-[12.5px] text-ink-2">{shortDate(q.date)}</span>
                     <span>

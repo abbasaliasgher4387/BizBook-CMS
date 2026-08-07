@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, DocNumber, EmptyState, PageHeader, btn } from "@/components/ui";
+import { Badge, EmptyState, PageHeader, btn } from "@/components/ui";
 import { money, shortDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { swatchFor } from "@/lib/quotation-templates";
@@ -7,8 +7,8 @@ import { swatchFor } from "@/lib/quotation-templates";
 export const dynamic = "force-dynamic";
 
 /* One grid, shared by the heading and by every row. The company column is gone
-   on purpose: the mark in the Number column already says whose document it is,
-   and repeating the name down a filtered list is the noise this page had. */
+   on purpose: the Number column already reads SAMS-0001, so the name would only
+   repeat itself down the list. */
 const ROW = "grid min-w-[42rem] grid-cols-[9rem_1fr_7.5rem_5.5rem_9rem] items-center gap-3 px-3";
 
 export default async function QuotationsPage(props: PageProps<"/quotations">) {
@@ -30,7 +30,7 @@ export default async function QuotationsPage(props: PageProps<"/quotations">) {
       where: selected ? { companyId: selected } : undefined,
       orderBy: { createdAt: "desc" },
       include: {
-        company: { select: { code: true, templateKey: true, logoUrl: true } },
+        company: { select: { code: true } },
         customer: { select: { name: true } },
       },
     }),
@@ -110,12 +110,10 @@ export default async function QuotationsPage(props: PageProps<"/quotations">) {
                 href={`/quotations/${q.id}`}
                 className={`${ROW} py-2.5 transition-colors hover:bg-canvas/60`}
               >
-                <DocNumber
-                  code={q.company.code}
-                  number={q.number}
-                  templateKey={q.company.templateKey}
-                  logoUrl={q.company.logoUrl}
-                />
+                {/* The same reference the printed sheet carries, spelled out. */}
+                <span className="tnum text-[13px] font-medium">
+                  {q.company.code}-{q.number}
+                </span>
                 <span className="truncate text-[13px]">{q.customer.name}</span>
                 <span className="tnum text-[12.5px] text-ink-2">{shortDate(q.date)}</span>
                 <span>

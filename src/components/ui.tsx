@@ -172,28 +172,3 @@ export function CompanyLogo({
     </span>
   );
 }
-
-/** A company's mark and the document's own number, the way a document carries
-    its reference: the mark says whose it is, the figures say which one. */
-export function DocNumber({
-  code,
-  number,
-  templateKey,
-  logoUrl,
-}: {
-  code: string;
-  number: string;
-  templateKey: string;
-  logoUrl?: string | null;
-}) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      {/* Fixed slot: codes are 2–4 letters wide, and without it the numbers
-          down the column would start at a different x on every row. */}
-      <span className="flex w-14 shrink-0">
-        <CompanyLogo code={code} templateKey={templateKey} logoUrl={logoUrl} />
-      </span>
-      <span className="tnum text-[13px] font-semibold tracking-[0.02em]">{number}</span>
-    </span>
-  );
-}
