@@ -22,7 +22,9 @@ export default function DownloadPdf({
     setBusy(true);
     try {
       const res = await fetch(href);
-      if (!res.ok) throw new Error(String(res.status));
+      // The route sends the real reason as plain text. Showing it beats "could
+      // not be generated", which is true of every possible failure and useless.
+      if (!res.ok) throw new Error((await res.text()).trim() || `Server returned ${res.status}.`);
 
       const url = URL.createObjectURL(await res.blob());
       const link = document.createElement("a");
@@ -30,8 +32,10 @@ export default function DownloadPdf({
       link.download = fileName;
       link.click();
       URL.revokeObjectURL(url);
-    } catch {
-      alert("The PDF could not be generated. Use Print instead, and choose Save as PDF.");
+    } catch (e) {
+      alert(
+        `The PDF could not be generated.\n\n${e instanceof Error ? e.message : e}\n\nUse Print instead, and choose Save as PDF.`,
+      );
     } finally {
       setBusy(false);
     }

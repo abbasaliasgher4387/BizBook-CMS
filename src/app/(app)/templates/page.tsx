@@ -58,13 +58,13 @@ export default async function TemplatesPage() {
                 <h2 className="truncate text-[13.5px] font-semibold">{real ? real.name : label}</h2>
                 {!real && <span className="ml-auto shrink-0 text-[11px] text-ink-3">Sample data</span>}
               </div>
-              {/* The sheet is a fixed 210mm wide, so it is scaled down and the
-                  wrapper is sized to the scaled result. */}
-              <div className="overflow-hidden bg-canvas p-4">
-                <div className="mx-auto h-[208mm] w-[147mm] overflow-hidden border border-line bg-white shadow-sm">
-                  <div className="origin-top-left scale-[0.7]">
-                    <Component doc={doc} />
-                  </div>
+              {/* The sheet is a fixed 210mm wide. It used to be pinned at 70%,
+                  which fits a laptop and is still 555px on a 390px phone —
+                  hence the half a letterhead. .sheet-fit scales it to whatever
+                  room the card actually has instead. */}
+              <div className="bg-canvas p-3 sm:p-4">
+                <div className="sheet-fit mx-auto max-w-[210mm] border border-line bg-white shadow-sm">
+                  <Component doc={doc} />
                 </div>
               </div>
             </section>

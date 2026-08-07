@@ -13,19 +13,29 @@ export default async function CustomersPage() {
 
       {customers.length > 0 && (
         <div className="divide-y divide-line-2 overflow-hidden rounded-md border border-line bg-paper">
-          {customers.map((c) => (
-            <details key={c.id} className="group">
-              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 transition-colors hover:bg-canvas/60 [&::-webkit-details-marker]:hidden">
-                <span className="text-[13px] font-medium">{c.name}</span>
-                <span className="text-[12px] text-ink-2">{[c.contactPerson, c.phone].filter(Boolean).join(" · ")}</span>
-                <span className="ml-auto text-[12px] text-ink-3 group-open:hidden">Edit</span>
-                <span className="ml-auto hidden text-[12px] text-ink-3 group-open:inline">Close</span>
-              </summary>
-              <div className="border-t border-line-2 bg-canvas/40 p-4">
-                <CustomerForm customer={c} />
-              </div>
-            </details>
-          ))}
+          {customers.map((c) => {
+            const meta = [c.contactPerson, c.phone].filter(Boolean).join(" · ");
+
+            return (
+              <details key={c.id} className="group">
+                {/* Only the name and the contact wrap; Edit sits outside that box, so it
+                    stays pinned right on every row. While it was inside the same wrap,
+                    where it landed depended on how long the customer's name happened to
+                    be — which is why one row looked nothing like the one above it. */}
+                <summary className="flex cursor-pointer list-none items-center gap-x-3 px-3 py-2.5 transition-colors hover:bg-canvas/60 [&::-webkit-details-marker]:hidden">
+                  <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                    <span className="text-[13px] font-medium">{c.name}</span>
+                    {meta && <span className="text-[12px] text-ink-2">{meta}</span>}
+                  </span>
+                  <span className="shrink-0 text-[12px] text-ink-3 group-open:hidden">Edit</span>
+                  <span className="hidden shrink-0 text-[12px] text-ink-3 group-open:inline">Close</span>
+                </summary>
+                <div className="border-t border-line-2 bg-canvas/40 p-4">
+                  <CustomerForm customer={c} />
+                </div>
+              </details>
+            );
+          })}
         </div>
       )}
 

@@ -8,8 +8,12 @@
 // it and it opens to 224px *over* the page rather than pushing it, so nothing
 // reflows and the table you were reading stays where it was. Pure CSS hover —
 // no state, no toggle to remember, nothing to get stuck open.
+//
+// A phone gets the same list on the same principle — over the page, not shoving
+// it down. See the drawer at the foot of this file.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { logout } from "@/app/auth-actions";
 import { BrandMark } from "@/components/ui";
 import { APP_NAME } from "@/lib/app";
@@ -77,6 +81,8 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M20.5 12H9.5" />
     </>
   ),
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  close: <path d="m6.5 6.5 11 11M17.5 6.5l-11 11" />,
 };
 
 function Icon({ name, className = "h-[18px] w-[18px] shrink-0" }: { name: string; className?: string }) {
@@ -256,6 +262,13 @@ function AccountFooter({ user, path, rail }: { user: SessionUser; path: string; 
 export default function SideNav({ user }: { user: SessionUser }) {
   const path = usePathname();
   const nav = navFor(user.role);
+  const drawer = useRef<HTMLDialogElement>(null);
+
+  // Tapping a link routes the page *behind* the drawer, and nothing else would
+  // shut it, so the route change does. Runs harmlessly on a closed dialog.
+  useEffect(() => {
+    drawer.current?.close();
+  }, [path]);
 
   return (
     <>
@@ -269,17 +282,56 @@ export default function SideNav({ user }: { user: SessionUser }) {
         <AccountFooter user={user} path={path} rail />
       </aside>
 
-      {/* Small screens get the same list behind a disclosure — no JavaScript,
-          no second copy of the navigation. Nothing collapses here: a dropdown
-          that opened to a column of icons would be a worse menu, not a smaller one. */}
-      <details className="no-print border-b border-rail-line bg-rail lg:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between pr-4 [&::-webkit-details-marker]:hidden">
-          <Brand rail={false} />
-          <span className="text-[12px] font-medium text-rail-fg">Menu</span>
-        </summary>
-        <NavList nav={nav} path={path} rail={false} />
-        <AccountFooter user={user} path={path} rail={false} />
-      </details>
+      {/* Small screens: a bar that stays put, and the same list in a drawer over
+          the page. This used to be a <details> that opened in the flow and
+          pushed everything down — on a phone that shoved the thing you were
+          reading off the bottom of the screen, and the list itself was taller
+          than the viewport.
+
+          The bar is sticky so the menu is one tap away however far down the
+          quotation you have scrolled. */}
+      <div className="no-print sticky top-0 z-30 flex h-14 items-center justify-between border-b border-rail-line bg-rail pr-2 lg:hidden">
+        <Brand rail={false} />
+        <button
+          type="button"
+          onClick={() => drawer.current?.showModal()}
+          className="flex h-10 items-center gap-2 rounded-[5px] px-2.5 text-[12.5px] font-medium text-rail-fg transition-colors hover:bg-rail-hover hover:text-white"
+        >
+          <Icon name="menu" />
+          Menu
+        </button>
+      </div>
+
+      {/* A real <dialog>: the backdrop, Esc-to-close, the focus trap and the
+          inert page behind it are the browser's job, not ours. Clicking the
+          backdrop lands on the dialog itself — the panel inside fills it — which
+          is how dismissing by tapping away is one line. */}
+      <dialog
+        ref={drawer}
+        aria-label="Navigation"
+        className="drawer no-print"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) drawer.current?.close();
+        }}
+      >
+        <div className="flex h-full flex-col">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-rail-line pr-2">
+            <Brand rail={false} />
+            <button
+              type="button"
+              onClick={() => drawer.current?.close()}
+              aria-label="Close menu"
+              className="flex h-10 w-10 items-center justify-center rounded-[5px] text-rail-fg transition-colors hover:bg-rail-hover hover:text-white"
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <NavList nav={nav} path={path} rail={false} />
+          </div>
+          <AccountFooter user={user} path={path} rail={false} />
+        </div>
+      </dialog>
     </>
   );
 }

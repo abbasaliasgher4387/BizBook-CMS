@@ -64,6 +64,62 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* A quotation sheet is 210mm wide, always — that width is what leaves the
+   printer, so re-flowing it for a phone would show the user a document they can
+   never actually get. It is scaled instead: this wrapper reports how much room
+   there is and the sheet shrinks to fit, never past 1:1.
+
+   `zoom` rather than `transform: scale()` because zoom changes the space the
+   element takes up. Nothing has to be told the scaled height, so the box round
+   the sheet is the right size at every width by itself.
+
+   overflow-x is the safety net: if a browser cannot do the sum, the sheet
+   scrolls sideways instead of stretching the whole page. */
+.sheet-fit {
+  container-type: inline-size;
+  overflow-x: auto;
+}
+
+.sheet-fit > * {
+  zoom: min(1, calc(100cqw / 794px)); /* 210mm = 793.7px */
+}
+
+/* The small-screen navigation. A real <dialog> so the backdrop, Esc-to-close,
+   the focus trap and the inert page behind all come from the browser instead of
+   from us — it only has to be told to sit against the left edge, full height,
+   rather than float in the middle. */
+.drawer {
+  margin: 0 auto 0 0;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: min(17rem, 82vw);
+  max-width: none;
+  border: 0;
+  padding: 0;
+  background: var(--rail);
+  translate: -100%;
+  transition:
+    translate 0.2s ease-out,
+    display 0.2s allow-discrete,
+    overlay 0.2s allow-discrete;
+}
+
+.drawer[open] {
+  translate: 0;
+}
+
+/* Without this the drawer is already in place when it opens and only animates
+   on the way out. */
+@starting-style {
+  .drawer[open] {
+    translate: -100%;
+  }
+}
+
+.drawer::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
 /* The sign-in screen's ground. The app's whole idea is a ruled sheet, so that
    is what it stands on: faint rules, a wash of white where the card sits so the
    lines never fight the form, and one breath of the house green from the top.
@@ -119,6 +175,17 @@ body {
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
+  }
+
+  /* On screen the sheet is scaled to whatever room the phone has. On paper it
+     must be 210mm and nothing else, or every PDF comes out shrunk. */
+  .sheet-fit {
+    container-type: normal;
+    overflow: visible;
+  }
+
+  .sheet-fit > * {
+    zoom: 1 !important;
   }
 
   /* Stop the browser dropping the coloured header bands and table fills. */

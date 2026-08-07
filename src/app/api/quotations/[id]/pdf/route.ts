@@ -3,7 +3,7 @@
 // comes out is the sheet and nothing else.
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { originOf, pdfFilename, renderPdf } from "@/lib/pdf";
+import { originOf, pdfError, pdfFilename, renderPdf } from "@/lib/pdf";
 import { prisma } from "@/lib/prisma";
 
 // Chromium cannot run on the edge runtime, and every download is a fresh render.
@@ -21,7 +21,12 @@ export async function GET(req: Request, ctx: RouteContext<"/api/quotations/[id]/
   });
   if (!quotation) notFound();
 
-  const pdf = await renderPdf(`${originOf(req)}/quotations/${id}`, req.headers.get("cookie"));
+  let pdf: Uint8Array;
+  try {
+    pdf = await renderPdf(`${originOf(req)}/quotations/${id}`, req.headers.get("cookie"));
+  } catch (e) {
+    return pdfError(e);
+  }
 
   return new Response(pdf as BodyInit, {
     headers: {

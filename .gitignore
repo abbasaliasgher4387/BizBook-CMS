@@ -43,3 +43,6 @@ next-env.d.ts
 
 # prisma generated client (rebuilt by `prisma generate`)
 /generated/prisma
+
+# screenshots from `npm run check:mobile`
+/scripts/.mobile-shots

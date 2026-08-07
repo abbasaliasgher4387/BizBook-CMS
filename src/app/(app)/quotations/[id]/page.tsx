@@ -114,8 +114,12 @@ export default async function QuotationPage(props: PageProps<"/quotations/[id]">
       </div>
 
       {/* The sheet sits on the canvas like paper on a desk — the one place in
-          the app where a shadow describes something real. */}
-      <div className="flex justify-center overflow-x-auto print:block print:overflow-visible">
+          the app where a shadow describes something real.
+
+          .sheet-fit scales it to the width available, so a phone shows the
+          whole document instead of a column of it you have to drag sideways.
+          On paper it goes back to 210mm — see the print rules in globals.css. */}
+      <div className="sheet-fit flex justify-center print:block">
         <div className="border border-line shadow-sm print:border-0 print:shadow-none">
           <Component doc={doc} />
         </div>

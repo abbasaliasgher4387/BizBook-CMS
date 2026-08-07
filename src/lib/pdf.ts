@@ -57,6 +57,21 @@ export async function renderPdf(url: string, cookie?: string | null): Promise<Ui
   }
 }
 
+/**
+ * What both PDF routes answer with when the render fails. The message goes back
+ * as the body rather than a bare 500: a headless browser fails for a dozen
+ * unrelated reasons — no Chrome, out of memory, the page timed out — and being
+ * told which one is the difference between a fix and a guess. Only signed-in
+ * staff can reach these routes, so there is nobody to leak it to.
+ */
+export function pdfError(e: unknown): Response {
+  console.error("PDF render failed:", e);
+  return new Response(e instanceof Error ? e.message : "The PDF could not be generated.", {
+    status: 500,
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
+
 /** The app's own origin, as seen by the incoming request. */
 export function originOf(req: Request): string {
   const h = req.headers;
