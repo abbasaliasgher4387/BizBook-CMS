@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+/* Mizan runs on one idea: the app is the desk a printed quotation comes from.
+   Ink on paper, hairlines instead of shadows, and colour spent only on the two
+   things that carry meaning — which company a document belongs to, and what
+   state it is in. Everything else stays greyscale on purpose.
+
+   No dark mode. A quotation is a sheet of white paper — inverting it on screen
+   would show the user something they can never print. */
+:root {
+  --paper: #ffffff;
+  --canvas: #f2f3f5;
+  --ink: #16181d;
+  --ink-2: #596170;
+  --ink-3: #89909d;
+  --line: #e0e3e8;
+  --line-2: #eceef1;
+
+  /* The sidebar. Warm graphite rather than blue-grey, so it reads as furniture
+     and never competes with a company's own colour. */
+  --rail: #191d24;
+  --rail-fg: #98a0ad;
+  --rail-line: #2a303a;
+  --rail-hover: #232932;
+
+  --accent: #0e6e4e;
+  --accent-hover: #0b5a40;
+  --accent-soft: #e8f3ee;
+  /* The only accent legible against --rail. */
+  --accent-bright: #35a877;
+  --danger: #b0242c;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-canvas: var(--canvas);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-rail: var(--rail);
+  --color-rail-fg: var(--rail-fg);
+  --color-rail-line: var(--rail-line);
+  --color-rail-hover: var(--rail-hover);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-bright: var(--accent-bright);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-plex-sans), "Segoe UI", system-ui, sans-serif;
+}
+
+/* Opt-in, never global: the quotation designs set their own figures and must
+   not change because the app chrome changed. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One focus treatment for every control in the app. */
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Printing: the sheet is already exactly 210mm wide, so give the page no margin
+   of its own and let each template's padding be the margin. Everything that
+   belongs to the app rather than the document is marked .no-print. */
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* The sidebar is gone, so its offset and the reading-width cap must go too —
+     otherwise every PDF comes out shifted 224px to the right. Stated here
+     rather than as print: utilities so it cannot lose to lg: on cascade order. */
+  .app-shell {
+    padding-left: 0 !important;
+  }
+
+  .app-main {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Stop the browser dropping the coloured header bands and table fills. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
