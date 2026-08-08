@@ -3,6 +3,7 @@
 // rarely and needs to see all of at once.
 import { deleteUser, saveUser } from "@/app/auth-actions";
 import { PageHeader, btn, fieldLabel, inputClass } from "@/components/ui";
+import { APP_NAME } from "@/lib/app";
 import { MIN_PASSWORD, requireAdmin } from "@/lib/auth";
 import { shortDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +25,7 @@ export default async function UsersPage() {
     <>
       <PageHeader
         title="User management"
-        subtitle="Who can sign in to Bizbook. Open a row to rename someone, change what they are allowed to do, or reset a forgotten password."
+        subtitle={`Who can sign in to ${APP_NAME}. Open a row to rename someone, change what they are allowed to do, or reset a forgotten password.`}
       />
 
       <div className="overflow-x-auto rounded-md border border-line bg-paper">

@@ -1,23 +1,44 @@
 "use server";
 
+// Every function here is a trust boundary. A "use server" export is a POST
+// endpoint with a public address: the sign-in guard in (app)/layout.tsx decides
+// what *renders*, and decides nothing about what a request may *call*. The proxy
+// only checks that some cookie is present, which any stranger can arrange. So
+// each one starts by asking who is calling.
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { num, parseInputDate, round2, text } from "@/lib/format";
+import { requireUser } from "@/lib/auth";
+import { num, parseInputDate, req, round2, text } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
-import { DEFAULT_TEMPLATE } from "@/lib/quotation-templates";
+import { DEFAULT_TEMPLATE, TEMPLATE_KEYS, type TemplateKey } from "@/lib/quotation-templates";
 import type { QuotationStatus } from "../../generated/prisma/enums";
 
-/* ------------------------------------------------------------------ helpers */
+/** A design the app actually has. An unknown key prints as the default anyway,
+    so storing one only ever leaves a row that lies about itself. */
+function readTemplateKey(fd: FormData): TemplateKey {
+  const key = String(fd.get("templateKey") ?? "");
+  return (TEMPLATE_KEYS as string[]).includes(key) ? (key as TemplateKey) : DEFAULT_TEMPLATE;
+}
 
-function req(fd: FormData, key: string, label: string): string {
-  const v = String(fd.get(key) ?? "").trim();
-  if (!v) throw new Error(`${label} is required.`);
-  return v;
+/**
+ * A logo is a file dropped into /public, so the only valid value is a path
+ * beginning with one slash. Left as free text it is an off-site URL that every
+ * letterhead goes and fetches — including the one a headless browser renders on
+ * the server while holding somebody's session.
+ */
+function readLogoUrl(fd: FormData): string | null {
+  const url = text(fd.get("logoUrl"));
+  if (url === null) return null;
+  if (!/^\/[^/\\]/.test(url)) {
+    throw new Error('The logo must be a file in the app, written as a path — for example "/logos/sams.png".');
+  }
+  return url;
 }
 
 /* ---------------------------------------------------------------- companies */
 
 export async function saveCompany(formData: FormData) {
+  await requireUser();
   const id = text(formData.get("id"));
   const data = {
     name: req(formData, "name", "Company name"),
@@ -29,8 +50,10 @@ export async function saveCompany(formData: FormData) {
     ntn: text(formData.get("ntn")),
     strn: text(formData.get("strn")),
     gstNumber: text(formData.get("gstNumber")),
-    logoUrl: text(formData.get("logoUrl")),
-    templateKey: String(formData.get("templateKey") ?? DEFAULT_TEMPLATE),
+    logoUrl: readLogoUrl(formData),
+    templateKey: readTemplateKey(formData),
+    // 0 means the company charges none and the bill form offers no GST row.
+    defaultGstPercent: round2(num(formData.get("defaultGstPercent"))),
   };
 
   if (id) await prisma.company.update({ where: { id }, data });
@@ -38,30 +61,34 @@ export async function saveCompany(formData: FormData) {
 
   revalidatePath("/companies");
   revalidatePath("/quotations");
+  revalidatePath("/bills");
 }
 
 export async function deleteCompany(formData: FormData) {
+  await requireUser();
   const id = req(formData, "id", "Company");
-  const used = await prisma.quotation.count({ where: { companyId: id } });
-  if (used > 0) {
-    throw new Error(`This company cannot be deleted — ${used} quotation(s) already use it.`);
+  // Both: a company can carry bills without quotations, and the foreign key
+  // would refuse either.
+  const [quotations, bills] = await Promise.all([
+    prisma.quotation.count({ where: { companyId: id } }),
+    prisma.bill.count({ where: { companyId: id } }),
+  ]);
+  if (quotations > 0 || bills > 0) {
+    throw new Error(
+      `This company cannot be deleted — ${quotations} quotation(s) and ${bills} bill(s) already use it.`,
+    );
   }
   await prisma.company.delete({ where: { id } });
   revalidatePath("/companies");
 }
 
 /**
- * The client's companies, typed up from the letterheads they supplied
- * (useful files/Letterheads.pdf and M.B IS LETTERHEAD,.pdf).
- *
- * Only companies with a real letterhead belong here. Names that appear in the
- * Excel bill formats but have no letterhead are deliberately left out — without
- * the printed sheet there is nothing to copy the design from, and an invented
- * design on a real quotation is worse than no company at all.
- *
- * Safe to run twice — existing codes are skipped, nothing is overwritten.
+ * The client's companies, typed up from the letterheads they supplied. Only
+ * companies with a real letterhead belong here: without the printed sheet there
+ * is nothing to copy the design from. Safe to run twice.
  */
 export async function seedCompanies() {
+  await requireUser();
   await prisma.company.createMany({
     skipDuplicates: true,
     data: [
@@ -152,6 +179,7 @@ export async function seedCompanies() {
 /* ---------------------------------------------------------------- customers */
 
 export async function saveCustomer(formData: FormData) {
+  await requireUser();
   const id = text(formData.get("id"));
   const data = {
     name: req(formData, "name", "Customer name"),
@@ -170,9 +198,17 @@ export async function saveCustomer(formData: FormData) {
 }
 
 export async function deleteCustomer(formData: FormData) {
+  await requireUser();
   const id = req(formData, "id", "Customer");
-  const used = await prisma.quotation.count({ where: { customerId: id } });
-  if (used > 0) throw new Error(`This customer cannot be deleted — ${used} quotation(s) already use it.`);
+  const [quotations, bills] = await Promise.all([
+    prisma.quotation.count({ where: { customerId: id } }),
+    prisma.bill.count({ where: { customerId: id } }),
+  ]);
+  if (quotations > 0 || bills > 0) {
+    throw new Error(
+      `This customer cannot be deleted — ${quotations} quotation(s) and ${bills} bill(s) already use them.`,
+    );
+  }
   await prisma.customer.delete({ where: { id } });
   revalidatePath("/customers");
 }
@@ -180,6 +216,7 @@ export async function deleteCustomer(formData: FormData) {
 /* ----------------------------------------------------------------- products */
 
 export async function saveProduct(formData: FormData) {
+  await requireUser();
   const id = text(formData.get("id"));
   const data = {
     name: req(formData, "name", "Product name"),
@@ -195,11 +232,14 @@ export async function saveProduct(formData: FormData) {
 }
 
 export async function deleteProduct(formData: FormData) {
+  await requireUser();
   const id = req(formData, "id", "Product");
-  // Quotation lines keep their own snapshot of description/unit/rate, so
-  // detaching the product loses nothing on an existing quotation.
-  await prisma.quotationItem.updateMany({ where: { productId: id }, data: { productId: null } });
-  await prisma.product.delete({ where: { id } });
+  // Lines keep their own snapshot, so detaching loses nothing on a document.
+  await prisma.$transaction([
+    prisma.quotationItem.updateMany({ where: { productId: id }, data: { productId: null } }),
+    prisma.billItem.updateMany({ where: { productId: id }, data: { productId: null } }),
+    prisma.product.delete({ where: { id } }),
+  ]);
   revalidatePath("/products");
 }
 
@@ -243,13 +283,9 @@ function readItems(fd: FormData): ItemRow[] {
 }
 
 /**
- * A quotation's total is its lines and nothing else.
- *
- * The GST and cartage columns stay in the schema for the Bills module, which is
- * where the client actually charges them — the quotation form no longer asks, so
- * `num()` reads the absent fields as 0 and total comes out equal to subtotal.
- * Re-saving an older quotation that still carries GST therefore clears it, which
- * is the intent: those figures do not belong on a quotation.
+ * A quotation's total is its lines and nothing else. GST and cartage belong to
+ * bills; the form no longer asks, so re-saving an old quotation clears them,
+ * which is the intent.
  */
 function readTotals(fd: FormData, items: ItemRow[]) {
   const subtotal = round2(items.reduce((sum, it) => sum + it.amount, 0));
@@ -263,8 +299,7 @@ function readTotals(fd: FormData, items: ItemRow[]) {
  * Next sequence for this company: "0001", "0002", ...
  *
  * ponytail: string ordering only holds while every number is 4 digits. At 10000
- * quotations for one company this needs a real counter column — roughly 30
- * years of daily quoting, so it can wait.
+ * per company this needs a real counter column.
  */
 async function nextNumber(companyId: string): Promise<string> {
   const last = await prisma.quotation.findFirst({
@@ -279,7 +314,8 @@ async function nextNumber(companyId: string): Promise<string> {
 function readCommon(fd: FormData) {
   return {
     date: parseInputDate(fd.get("date")) ?? new Date(),
-    validUntil: parseInputDate(fd.get("validUntil")),
+    // The shared form calls this `until`; on a bill it is the due date.
+    validUntil: parseInputDate(fd.get("until")),
     status: String(fd.get("status") ?? "DRAFT") as QuotationStatus,
     poNumber: text(fd.get("poNumber")),
     dcNumber: text(fd.get("dcNumber")),
@@ -289,6 +325,7 @@ function readCommon(fd: FormData) {
 }
 
 export async function createQuotation(formData: FormData) {
+  await requireUser();
   const companyId = req(formData, "companyId", "Company");
   const customerId = req(formData, "customerId", "Customer");
   const items = readItems(formData);
@@ -326,6 +363,7 @@ export async function createQuotation(formData: FormData) {
 }
 
 export async function updateQuotation(formData: FormData) {
+  await requireUser();
   const id = req(formData, "id", "Quotation");
   const customerId = req(formData, "customerId", "Customer");
   const items = readItems(formData);
@@ -334,8 +372,8 @@ export async function updateQuotation(formData: FormData) {
   const common = readCommon(formData);
   const totals = readTotals(formData, items);
 
-  // The company — and therefore the number — is fixed once issued; only the
-  // contents change. Lines are replaced wholesale: simpler and always correct.
+  // The company, and so the number, is fixed once issued. Lines are replaced
+  // wholesale: simpler and always correct.
   await prisma.$transaction([
     prisma.quotationItem.deleteMany({ where: { quotationId: id } }),
     prisma.quotation.update({
@@ -349,6 +387,7 @@ export async function updateQuotation(formData: FormData) {
 }
 
 export async function setQuotationStatus(formData: FormData) {
+  await requireUser();
   const id = req(formData, "id", "Quotation");
   const status = String(formData.get("status") ?? "DRAFT") as QuotationStatus;
   await prisma.quotation.update({ where: { id }, data: { status } });
@@ -357,6 +396,7 @@ export async function setQuotationStatus(formData: FormData) {
 }
 
 export async function deleteQuotation(formData: FormData) {
+  await requireUser();
   const id = req(formData, "id", "Quotation");
   await prisma.quotation.delete({ where: { id } }); // items cascade
   revalidatePath("/quotations");

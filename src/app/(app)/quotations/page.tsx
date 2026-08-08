@@ -1,19 +1,22 @@
 import Link from "next/link";
-import { Badge, EmptyState, PageHeader, btn } from "@/components/ui";
-import { money, shortDate } from "@/lib/format";
+import { Badge, CompanyTabs, EmptyState, FilterRow, PageHeader, btn } from "@/components/ui";
+import { QUOTATION_STATUSES } from "@/lib/app";
+import { money, rupees, shortDate } from "@/lib/format";
+import { listFilters, listWhere } from "@/lib/list-filters";
 import { prisma } from "@/lib/prisma";
-import { swatchFor } from "@/lib/quotation-templates";
+import type { QuotationStatus } from "../../../../generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
 
-/* One grid, shared by the heading and by every row. The company column is gone
-   on purpose: the Number column already reads SAMS-0001, so the name would only
-   repeat itself down the list. */
+/* One grid, shared by the heading and by every row. No company column: the
+   Number already reads SAMS-0001. */
 const ROW = "grid min-w-[42rem] grid-cols-[9rem_1fr_7.5rem_5.5rem_9rem] items-center gap-3 px-3";
 
 export default async function QuotationsPage(props: PageProps<"/quotations">) {
   const sp = await props.searchParams;
-  const selected = typeof sp.company === "string" ? sp.company : "";
+  const f = listFilters(sp, QUOTATION_STATUSES);
+  // Already checked against QUOTATION_STATUSES; the cast only names the enum.
+  const where = { ...listWhere(f), ...(f.status ? { status: f.status as QuotationStatus } : {}) };
 
   const [companies, quotations, totalCount] = await Promise.all([
     prisma.company.findMany({
@@ -27,7 +30,7 @@ export default async function QuotationsPage(props: PageProps<"/quotations">) {
       },
     }),
     prisma.quotation.findMany({
-      where: selected ? { companyId: selected } : undefined,
+      where,
       orderBy: { createdAt: "desc" },
       include: {
         company: { select: { code: true } },
@@ -37,15 +40,14 @@ export default async function QuotationsPage(props: PageProps<"/quotations">) {
     prisma.quotation.count(),
   ]);
 
-  const withWork = companies.filter((c) => c._count.quotations > 0);
-  const current = companies.find((c) => c.id === selected);
+  const current = companies.find((c) => c.id === f.company);
+  /* What the list holds with the filter row cleared — the tab's own figure. */
+  const scope = current ? current._count.quotations : totalCount;
+  const shownTotal = quotations.reduce((sum, q) => sum + Number(q.total), 0);
 
   return (
     <>
-      <PageHeader
-        title="Quotations"
-        subtitle={current ? `${current.name} — ${current._count.quotations} of ${totalCount} in total.` : undefined}
-      >
+      <PageHeader title="Quotations" subtitle={current?.name}>
         {companies.length > 0 && (
           <Link href="/quotations/new" className={btn.primary}>
             New quotation
@@ -53,20 +55,25 @@ export default async function QuotationsPage(props: PageProps<"/quotations">) {
         )}
       </PageHeader>
 
-      {withWork.length > 1 && (
-        <nav aria-label="Filter by company" className="mb-4 flex flex-wrap items-center gap-1.5">
-          <Tab href="/quotations" active={!selected} label="All companies" count={totalCount} />
-          {withWork.map((c) => (
-            <Tab
-              key={c.id}
-              href={`/quotations?company=${c.id}`}
-              active={selected === c.id}
-              label={c.code}
-              count={c._count.quotations}
-              swatch={swatchFor(c.templateKey)}
-            />
-          ))}
-        </nav>
+      {companies.length > 0 && (
+        <>
+          <CompanyTabs
+            base="/quotations"
+            selected={f.company}
+            total={totalCount}
+            companies={companies
+              .filter((c) => c._count.quotations > 0)
+              .map((c) => ({ id: c.id, code: c.code, templateKey: c.templateKey, count: c._count.quotations }))}
+          />
+          <FilterRow action="/quotations" filters={f} statuses={QUOTATION_STATUSES} />
+
+          <p className="mb-3 border-b border-line pb-3 text-[12px] text-ink-2">
+            <span className="tnum font-medium text-ink">{quotations.length}</span> of{" "}
+            <span className="tnum">{scope}</span> shown
+            <span className="px-1.5 text-ink-3">·</span>
+            Total <span className="tnum font-medium text-ink">{rupees(shownTotal)}</span>
+          </p>
+        </>
       )}
 
       {companies.length === 0 && (
@@ -82,12 +89,25 @@ export default async function QuotationsPage(props: PageProps<"/quotations">) {
 
       {companies.length > 0 && quotations.length === 0 && (
         <EmptyState>
-          {selected ? "No quotations for this company yet." : "No quotations yet."}
-          <span className="mt-3 block">
-            <Link href="/quotations/new" className={btn.primary}>
-              New quotation
-            </Link>
-          </span>
+          {f.active ? (
+            <>
+              Nothing matches these filters.
+              <span className="mt-3 block">
+                <Link href={f.company ? `/quotations?company=${f.company}` : "/quotations"} className={btn.ghost}>
+                  Clear filters
+                </Link>
+              </span>
+            </>
+          ) : (
+            <>
+              {f.company ? "No quotations for this company yet." : "No quotations yet."}
+              <span className="mt-3 block">
+                <Link href="/quotations/new" className={btn.primary}>
+                  New quotation
+                </Link>
+              </span>
+            </>
+          )}
         </EmptyState>
       )}
 
@@ -110,7 +130,6 @@ export default async function QuotationsPage(props: PageProps<"/quotations">) {
                 href={`/quotations/${q.id}`}
                 className={`${ROW} py-2.5 transition-colors hover:bg-canvas/60`}
               >
-                {/* The same reference the printed sheet carries, spelled out. */}
                 <span className="tnum text-[13px] font-medium">
                   {q.company.code}-{q.number}
                 </span>
@@ -126,33 +145,5 @@ export default async function QuotationsPage(props: PageProps<"/quotations">) {
         </div>
       )}
     </>
-  );
-}
-
-function Tab({
-  href,
-  active,
-  label,
-  count,
-  swatch,
-}: {
-  href: string;
-  active: boolean;
-  label: string;
-  count: number;
-  swatch?: string;
-}) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[5px] border px-2.5 text-[12.5px] font-medium transition-colors ${
-        active ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:bg-canvas"
-      }`}
-    >
-      {swatch && <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: swatch }} />}
-      {label}
-      <span className={`tnum text-[11px] ${active ? "text-white/60" : "text-ink-3"}`}>{count}</span>
-    </Link>
   );
 }

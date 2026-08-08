@@ -3,7 +3,7 @@
 // and signs off bottom-left, so this one does too.
 import { money, qty, shortDate } from "@/lib/format";
 import { inter, merriweather } from "./fonts";
-import { join, totalLines } from "./shared";
+import { docRef, docWords, join, totalLines } from "./shared";
 import type { TemplateProps } from "./types";
 
 const BROWN = "#5B2318";
@@ -12,6 +12,7 @@ const GOLD = "#C08A2A";
 export default function Taheri({ doc }: TemplateProps) {
   const { company, customer, items } = doc;
   const totals = totalLines(doc);
+  const w = docWords(doc.kind);
 
   return (
     <div className={`${inter.className} flex w-[210mm] min-h-[297mm] print:min-h-0 flex-col bg-white px-[16mm] py-[12mm] text-[#1a1a1a]`}>
@@ -52,15 +53,15 @@ export default function Taheri({ doc }: TemplateProps) {
         className="mt-7 text-center text-[16pt] font-bold uppercase tracking-[0.45em]"
         style={{ color: BROWN, fontFamily: merriweather.style.fontFamily }}
       >
-        Quotation
+        {w.title}
       </h2>
 
       {/* ---- meta strip, buyer underneath: their bill's order ---- */}
       <div className="mt-5 grid grid-cols-2 border-y-2 text-[10pt]" style={{ borderColor: BROWN }}>
         <div className="space-y-0.5 border-r px-3 py-2" style={{ borderColor: "#e0cfae" }}>
-          <Pair label="Quotation #" value={`${company.code}-${doc.number}`} strong />
+          <Pair label={w.ref} value={docRef(doc)} strong />
           <Pair label="Date" value={shortDate(doc.date)} />
-          <Pair label="Valid Until" value={shortDate(doc.validUntil)} />
+          <Pair label={w.until} value={shortDate(doc.until)} />
         </div>
         <div className="space-y-0.5 px-3 py-2">
           {doc.poNumber && <Pair label="PO #" value={doc.poNumber} />}

@@ -1,6 +1,5 @@
-// Sign-in for one office. No provider, no token library, no session table —
-// Node's own crypto does both jobs the app needs: scrypt to store a password,
-// HMAC to sign the cookie that says who is holding the browser.
+// Sign-in for one office: no provider, no token library, no session table.
+// scrypt stores the password, HMAC signs the cookie.
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -8,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 import type { Role } from "../../generated/prisma/enums";
 
 export const SESSION_COOKIE = "bizbook_session";
-/** Two weeks. Long enough that the office is not asked to log in twice a day. */
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
 
 function secret(): string {
@@ -31,7 +29,15 @@ export function hashPassword(plain: string): string {
   return `${salt.toString("hex")}:${scryptSync(plain, salt, 64).toString("hex")}`;
 }
 
+/** The one rule on new passwords. Anything longer is the user's business. */
+export const MIN_PASSWORD = 6;
+/** Not a policy, a ceiling — see verifyPassword. */
+export const MAX_PASSWORD = 200;
+
 export function verifyPassword(plain: string, stored: string): boolean {
+  // scrypt is deliberately expensive and the login form is open to the world:
+  // without this line a one-megabyte "password" is a free way to pin a CPU.
+  if (plain.length > MAX_PASSWORD) return false;
   const [saltHex, keyHex] = stored.split(":");
   if (!saltHex || !keyHex) return false;
   const key = Buffer.from(keyHex, "hex");
@@ -40,12 +46,64 @@ export function verifyPassword(plain: string, stored: string): boolean {
   return timingSafeEqual(key, scryptSync(plain, Buffer.from(saltHex, "hex"), key.length));
 }
 
-/** The one rule on new passwords. Anything longer is the user's business. */
-export const MIN_PASSWORD = 6;
-
 export function checkPassword(plain: string): string {
   if (plain.length < MIN_PASSWORD) throw new Error(`Password must be at least ${MIN_PASSWORD} characters long.`);
+  if (plain.length > MAX_PASSWORD) throw new Error(`Password must be at most ${MAX_PASSWORD} characters long.`);
   return plain;
+}
+
+/**
+ * A hash of nothing, so a username that does not exist can be made to cost the
+ * same scrypt as one that does. Without it the login form answers "no such
+ * user" in a millisecond and "wrong password" in a hundred — which is a staff
+ * list for anyone holding a stopwatch.
+ */
+const DECOY_HASH = hashPassword(randomBytes(32).toString("hex"));
+
+/** Burns one scrypt so a failed lookup costs what a failed password costs. */
+export function wasteVerification(plain: string): void {
+  verifyPassword(plain, DECOY_HASH);
+}
+
+/* --------------------------------------------------------- guessing the door */
+
+/**
+ * Failed sign-ins, counted per username and per source address. Six characters
+ * is the floor on a password, so given unlimited tries a dictionary gets there;
+ * this shuts the door long before it does.
+ *
+ * ponytail: a Map in this process — a restart forgives, and a second instance
+ * counts separately. Right size for one office on one server; move the counter
+ * into Postgres if this is ever scaled out.
+ */
+const LOCK_AFTER = 8;
+const LOCK_WINDOW_MS = 15 * 60 * 1000;
+const attempts = new Map<string, { count: number; until: number }>();
+
+export function isLockedOut(key: string): boolean {
+  const hit = attempts.get(key);
+  return hit !== undefined && hit.count >= LOCK_AFTER && hit.until > Date.now();
+}
+
+export function recordFailure(key: string): void {
+  const now = Date.now();
+  const hit = attempts.get(key);
+  // A fresh window once the old one has run out, so yesterday's typo does not
+  // count towards today.
+  attempts.set(
+    key,
+    hit && hit.until > now ? { count: hit.count + 1, until: hit.until } : { count: 1, until: now + LOCK_WINDOW_MS },
+  );
+
+  // Half of every key is a string the caller chooses, so nothing stops the map
+  // growing until it is the outage. Sweep the expired entries.
+  if (attempts.size > 2000) {
+    for (const [k, v] of attempts) if (v.until <= now) attempts.delete(k);
+  }
+}
+
+export function clearFailures(key: string): void {
+  attempts.delete(key);
 }
 
 /* ----------------------------------------------------------------- sessions */
@@ -122,6 +180,25 @@ export async function requireAdmin(): Promise<SessionUser> {
 }
 
 /**
+ * The password the very first administrator is created with.
+ *
+ * "admin123" is fine on a laptop and indefensible on a public URL: the account
+ * name is in this file, the app creates it by itself, and the first stranger to
+ * find the login page is inside. So production must name its own, and a
+ * deployment that has not is told exactly what is missing.
+ */
+function firstAdminPassword(): string {
+  const fromEnv = process.env.ADMIN_PASSWORD;
+  if (fromEnv) return checkPassword(fromEnv);
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "ADMIN_PASSWORD is not set. This database has no users yet; put the first administrator's password in the environment before opening the site.",
+    );
+  }
+  return "admin123";
+}
+
+/**
  * First run: there is no account to sign in with, so the one the client was
  * given is created here. Does nothing the moment any user exists — including
  * after that first admin has renamed themselves or changed the password.
@@ -130,13 +207,16 @@ export async function requireAdmin(): Promise<SessionUser> {
  */
 export async function ensureAdmin(): Promise<boolean> {
   if ((await prisma.user.count()) > 0) return false;
+  // Read before the create, so a production deployment missing the variable
+  // fails loudly instead of quietly standing up a guessable account.
+  const password = firstAdminPassword();
   try {
     await prisma.user.create({
       data: {
         username: "administrator",
         name: "Administrator",
         role: "ADMIN",
-        passwordHash: hashPassword("admin123"),
+        passwordHash: hashPassword(password),
       },
     });
     return true;

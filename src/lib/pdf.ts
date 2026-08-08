@@ -1,11 +1,9 @@
-// A quotation is a printed document, so the PDF is produced the same way the
-// paper is: a real browser renders the same page and prints it. No second
-// layout to keep in sync, and what downloads is exactly what a printer emits.
-//
-// Locally that is the Chrome already installed on the machine; on Vercel it is
-// the bundled headless build. Set CHROME_PATH to override either.
+// The PDF is made the same way the paper is: a real browser prints the same
+// page, so there is no second layout to keep in sync. Locally that is the
+// installed Chrome, on Vercel the bundled headless build; CHROME_PATH overrides.
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
+import { SESSION_COOKIE } from "@/lib/auth";
 
 const LOCAL_CHROME = [
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -27,13 +25,27 @@ async function localExecutable(): Promise<string> {
   return found;
 }
 
+/** One named cookie out of a Cookie header, or null. */
+function readCookie(header: string | null | undefined, name: string): string | null {
+  for (const part of (header ?? "").split(";")) {
+    const eq = part.indexOf("=");
+    if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+  }
+  return null;
+}
+
 /**
- * Renders a page of this app to an A4 PDF. `url` must be absolute.
+ * Renders a page of this app to an A4 PDF. `url` must be absolute, and must come
+ * from originOf() — never from anything the caller sent.
  *
  * `cookie` is the Cookie header of the request that asked for the download. The
  * pages being printed sit behind the sign-in guard, so without it the headless
  * browser is a stranger and every PDF comes out as the login screen. Passing it
  * on also means a download is rendered as — and only as — whoever asked for it.
+ *
+ * The session is handed over as a cookie tied to this app's own origin, not as a
+ * blanket Cookie header. A header is attached to *every* request the page makes,
+ * so one off-site <img> on a letterhead would be sent somebody's live session.
  */
 export async function renderPdf(url: string, cookie?: string | null): Promise<Uint8Array> {
   const onVercel = Boolean(process.env.VERCEL);
@@ -45,8 +57,20 @@ export async function renderPdf(url: string, cookie?: string | null): Promise<Ui
   );
 
   try {
+    const session = readCookie(cookie, SESSION_COOKIE);
+    if (session) {
+      const target = new URL(url);
+      await browser.setCookie({
+        name: SESSION_COOKIE,
+        value: session,
+        domain: target.hostname,
+        path: "/",
+        secure: target.protocol === "https:",
+        httpOnly: true,
+      });
+    }
+
     const page = await browser.newPage();
-    if (cookie) await page.setExtraHTTPHeaders({ cookie });
     // networkidle0 so the letterhead webfonts have finished loading — without
     // it the first PDF after a cold start comes out in a fallback face.
     await page.goto(url, { waitUntil: "networkidle0", timeout: 30_000 });
@@ -72,12 +96,34 @@ export function pdfError(e: unknown): Response {
   });
 }
 
-/** The app's own origin, as seen by the incoming request. */
+/**
+ * The app's own origin — the one address the headless browser is ever pointed
+ * at.
+ *
+ * Not the request's Host or X-Forwarded-Host header. Those are typed by whoever
+ * is calling, and this URL is then fetched by a browser running on the server
+ * and carrying that caller's session: one `X-Forwarded-Host: attacker.example`
+ * and the server fetches whatever the attacker likes — an internal address, the
+ * cloud metadata endpoint — and hands the result back as a PDF. The origin has
+ * to come from configuration, which no request can rewrite.
+ *
+ * On Vercel, VERCEL_URL is set by the platform and is safe for the same reason.
+ * APP_ORIGIN overrides it for anywhere else.
+ */
 export function originOf(req: Request): string {
-  const h = req.headers;
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
+  const configured = process.env.APP_ORIGIN ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+  if (configured) return configured.replace(/\/+$/, "");
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("APP_ORIGIN is not set. PDF downloads need the site's own address, e.g. https://bizbook.example.");
+  }
+
+  // Development: the dev server's own port, and only ever this machine.
+  const host = req.headers.get("host") ?? "localhost:3000";
+  if (!/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)) {
+    throw new Error(`Refusing to render a PDF from "${host}". Set APP_ORIGIN to this app's address.`);
+  }
+  return `http://${host}`;
 }
 
 /** Turns a document number into a safe download filename. */

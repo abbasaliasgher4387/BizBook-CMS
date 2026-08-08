@@ -2,7 +2,7 @@
 // condensed name, a wrapped trade line, and a centred address block at the foot.
 import { money, qty, shortDate } from "@/lib/format";
 import { inter, montserrat } from "./fonts";
-import { join, totalLines } from "./shared";
+import { docRef, docWords, join, totalLines } from "./shared";
 import type { TemplateProps } from "./types";
 
 const GREEN = "#4E9A2F";
@@ -11,6 +11,7 @@ const CHARCOAL = "#2F3437";
 export default function Bizway({ doc }: TemplateProps) {
   const { company, customer, items } = doc;
   const totals = totalLines(doc);
+  const w = docWords(doc.kind);
 
   return (
     <div className={`${inter.className} flex w-[210mm] min-h-[297mm] print:min-h-0 flex-col bg-white px-[16mm] py-[12mm] text-[#1f2326]`}>
@@ -50,7 +51,7 @@ export default function Bizway({ doc }: TemplateProps) {
           className="inline-block px-8 py-1.5 text-[14pt] font-extrabold uppercase tracking-[0.35em] text-white"
           style={{ backgroundColor: GREEN, fontFamily: montserrat.style.fontFamily }}
         >
-          Quotation
+          {w.title}
         </span>
       </div>
 
@@ -76,9 +77,9 @@ export default function Bizway({ doc }: TemplateProps) {
 
         <table className="w-full border-collapse text-[9.5pt]">
           <tbody>
-            <Meta label="Quotation #" value={`${company.code}-${doc.number}`} accent />
+            <Meta label={w.ref} value={docRef(doc)} accent />
             <Meta label="Date" value={shortDate(doc.date)} />
-            <Meta label="Valid Until" value={shortDate(doc.validUntil)} />
+            <Meta label={w.until} value={shortDate(doc.until)} />
             {doc.poNumber && <Meta label="PO #" value={doc.poNumber} />}
             {doc.dcNumber && <Meta label="DC #" value={doc.dcNumber} />}
           </tbody>

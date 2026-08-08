@@ -4,14 +4,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { setQuotationStatus } from "@/app/actions";
 import { Badge, CompanyLogo, btn, inputClass } from "@/components/ui";
+import { QUOTATION_STATUSES } from "@/lib/app";
 import { prisma } from "@/lib/prisma";
 import { templateFor } from "@/lib/quotation-templates";
-import type { QuotationDoc } from "@/lib/quotation-templates/types";
+import type { SheetDoc } from "@/lib/quotation-templates/types";
 import Toolbar from "./toolbar";
 
 export const dynamic = "force-dynamic";
-
-const STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"];
 
 export default async function QuotationPage(props: PageProps<"/quotations/[id]">) {
   const { id } = await props.params;
@@ -22,27 +21,31 @@ export default async function QuotationPage(props: PageProps<"/quotations/[id]">
       company: true,
       customer: true,
       items: { orderBy: { sortOrder: "asc" } },
+      // Normally none or one. Only the first is linked to; the point is to stop
+      // the same quotation being billed twice by accident.
+      bills: { select: { id: true, number: true }, orderBy: { number: "asc" } },
     },
   });
   if (!q) notFound();
 
-  const { Component, label } = templateFor(q.company.templateKey);
+  const { Component } = templateFor(q.company.templateKey);
 
   // Prisma hands back Decimal objects and full model rows; the templates want
   // plain numbers and only the fields they print.
-  const doc: QuotationDoc = {
+  const doc: SheetDoc = {
+    kind: "QUOTATION",
     number: q.number,
     date: q.date,
-    validUntil: q.validUntil,
+    until: q.validUntil,
     status: q.status,
     poNumber: q.poNumber,
     dcNumber: q.dcNumber,
     notes: q.notes,
     terms: q.terms,
     subtotal: Number(q.subtotal),
-    gstPercent: Number(q.gstPercent),
-    gstAmount: Number(q.gstAmount),
-    cartage: Number(q.cartage),
+    // A quotation is its lines and nothing else. Cartage and GST are charged on
+    // the bill — see src/app/(app)/bills.
+    charges: [],
     total: Number(q.total),
     company: {
       name: q.company.name,
@@ -89,7 +92,7 @@ export default async function QuotationPage(props: PageProps<"/quotations/[id]">
             <Badge status={q.status} />
           </h1>
           <p className="mt-1 text-[12.5px] text-ink-2">
-            {q.company.name} · {q.customer.name} · <span className="text-ink-3">{label} design</span>
+            {q.company.name} · {q.customer.name}
           </p>
         </div>
 
@@ -97,7 +100,7 @@ export default async function QuotationPage(props: PageProps<"/quotations/[id]">
           <form action={setQuotationStatus} className="flex items-center gap-1.5">
             <input type="hidden" name="id" value={q.id} />
             <select name="status" aria-label="Status" defaultValue={q.status} className={`${inputClass} w-auto`}>
-              {STATUSES.map((s) => (
+              {QUOTATION_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -105,6 +108,21 @@ export default async function QuotationPage(props: PageProps<"/quotations/[id]">
             </select>
             <button className={btn.ghost}>Save status</button>
           </form>
+
+          {/* Billed already, or ready to be. Both are shown here as well as on
+              the Bills page, because this is where somebody stands when they
+              decide the job is won. */}
+          {q.bills.length > 0 ? (
+            <Link href={`/bills/${q.bills[0].id}`} className={btn.ghost}>
+              Bill {q.company.code}-B-{q.bills[0].number}
+            </Link>
+          ) : (
+            q.status === "ACCEPTED" && (
+              <Link href={`/bills/new?from=${q.id}`} className={btn.ghost}>
+                Create bill
+              </Link>
+            )
+          )}
 
           <Link href={`/quotations/${q.id}/edit`} className={btn.ghost}>
             Edit

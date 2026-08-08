@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { updateQuotation } from "@/app/actions";
+import DocumentForm from "@/components/document-form";
 import { PageHeader } from "@/components/ui";
 import { inputDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
-import QuotationForm from "../../quotation-form";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,8 @@ export default async function EditQuotationPage(props: PageProps<"/quotations/[i
         title={`Edit ${quotation.company.code}-${quotation.number}`}
         subtitle="The quotation number and the company cannot be changed. Everything else can be edited."
       />
-      <QuotationForm
+      <DocumentForm
+        kind="QUOTATION"
         action={updateQuotation}
         submitLabel="Save changes"
         companies={companies.map((c) => ({ id: c.id, name: c.name, code: c.code }))}
@@ -43,7 +44,7 @@ export default async function EditQuotationPage(props: PageProps<"/quotations/[i
           companyId: quotation.companyId,
           customerId: quotation.customerId,
           date: inputDate(quotation.date),
-          validUntil: inputDate(quotation.validUntil),
+          until: inputDate(quotation.validUntil),
           status: quotation.status,
           poNumber: quotation.poNumber ?? "",
           dcNumber: quotation.dcNumber ?? "",
@@ -56,6 +57,7 @@ export default async function EditQuotationPage(props: PageProps<"/quotations/[i
             quantity: String(Number(it.quantity)),
             rate: String(Number(it.rate)),
           })),
+          charges: [], // quotations carry none; the form hides the panel
         }}
       />
     </>

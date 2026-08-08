@@ -2,16 +2,12 @@
 //
 //     npm run check:mobile
 //
-// It asserts the one thing "mobile responsive" actually means and a screenshot
-// cannot: at 390px and 360px no page is wider than the screen, so nothing has
-// to be dragged sideways to be read. Plus the two pieces that were wrong before
-// — the 210mm quotation sheet, and a menu that pushed the page down instead of
-// opening over it.
+// At 390px and 360px no page may be wider than the screen. Also checks the
+// 210mm sheet and that the menu opens over the page rather than pushing it
+// down. Screenshots land in scripts/.mobile-shots/.
 //
-// Screenshots land in scripts/.mobile-shots/ to look at afterwards.
-//
-// It signs its own session cookie exactly as src/lib/auth.ts does, off the dev
-// secret and the dev database, so it never needs anybody's password.
+// Signs its own session cookie as src/lib/auth.ts does, so it never needs a
+// password.
 import { createHmac } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -46,6 +42,7 @@ const { rows: users } = await db.query(
   `SELECT id, "passwordHash" FROM "User" WHERE "isActive" = true ORDER BY role LIMIT 1`,
 );
 const { rows: quotes } = await db.query(`SELECT id FROM "Quotation" LIMIT 1`);
+const { rows: bills } = await db.query(`SELECT id FROM "Bill" LIMIT 1`);
 await db.end();
 
 if (!users.length) throw new Error("No active user in the dev database — nothing to sign in as.");
@@ -58,12 +55,19 @@ const mac = createHmac("sha256", secret).update(`${users[0].id}.${expires}.${use
 
 const PAGES = [
   ["/", "Dashboard"],
+  // Renders for a signed-in browser too: the proxy only redirects *towards* it.
+  ["/login", "Login"],
   ["/quotations", "Quotations list"],
+  ["/quotations?q=al&status=SENT", "Quotations filtered"],
   ["/quotations/new", "New quotation"],
-  ["/templates", "Quotation designs"],
+  ["/bills", "Bills list"],
+  ["/bills/new", "New bill"],
+  ["/templates", "Designs"],
+  ["/templates?kind=bill", "Designs as bills"],
   ["/companies", "Companies"],
   ["/customers", "Customers"],
   ...(quotes.length ? [[`/quotations/${quotes[0].id}`, "Quotation view"]] : []),
+  ...(bills.length ? [[`/bills/${bills[0].id}`, "Bill view"], [`/bills/${bills[0].id}/edit`, "Edit bill"]] : []),
 ];
 
 /** The two ends of what people actually hold. Anything wider only gets easier. */
@@ -95,9 +99,8 @@ for (const [width, label] of SCREENS) {
     const m = await page.evaluate(() => ({
       scrollWidth: document.scrollingElement.scrollWidth,
       inner: window.innerWidth,
-      // Naming what pokes out: a bare number is no use when it comes to fixing
-      // it. An element inside its own overflow-x:auto box is fine and does not
-      // widen the page, which is why this is a note and not the verdict.
+      // Names what pokes out. An element inside its own overflow-x:auto box is
+      // fine and does not widen the page, so this is a note, not the verdict.
       over: [
         ...new Set(
           [...document.querySelectorAll("body *")]
@@ -123,7 +126,7 @@ await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true
 await page.goto(`${BASE}/templates`, { waitUntil: "networkidle0" });
 
 const mainTopBefore = await page.evaluate(() => document.querySelector("main").getBoundingClientRect().top);
-await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.includes("Menu")).click());
+await page.evaluate(() => document.querySelector('button[aria-label="Open menu"]').click());
 await new Promise((r) => setTimeout(r, 400));
 
 const drawer = await page.evaluate(() => {
@@ -145,14 +148,11 @@ const stillOpen = await page.evaluate(() => document.querySelector("dialog").ope
 
 /* ------------------------------ and on paper, still 210mm and not a mm less */
 
-// The screen scaling is a zoom, and a zoom left switched on for print would
-// shrink every PDF the office sends out without anyone noticing until a client
-// held one. Worth its own assertion.
+// A zoom left switched on for print would shrink every PDF the office sends,
+// unnoticed until a client held one.
 let sheetOnPaper = 0;
 if (quotes.length) {
-  // At A4 width, because that is the page Chrome lays out against when it
-  // prints — measuring this at phone width would only prove the phone is
-  // narrow, which we knew.
+  // At A4 width, the page Chrome lays out against when it prints.
   await page.setViewport({ width: 794, height: 1123 });
   await page.emulateMediaType("print");
   await page.goto(`${BASE}/quotations/${quotes[0].id}`, { waitUntil: "networkidle0" });

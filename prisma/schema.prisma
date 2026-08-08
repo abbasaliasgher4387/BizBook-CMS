@@ -1,9 +1,8 @@
-// Phase 1: quotations only. No chart of accounts, no double entry, no FBR.
+// Phase 1: quotations and bills. No chart of accounts, no double entry, no FBR.
 // Money is always Decimal — never Float. Float loses paisa.
 //
-// Field set comes from the client's own bill formats (useful files/Bill
-// Format_121650.xlsx) and letterheads (useful files/Letterheads.pdf). Every
-// company gets the same fields; only the printed design differs.
+// Fields come from the client's own bill formats and letterheads. Every company
+// gets the same fields; only the printed design differs.
 
 generator client {
   provider = "prisma-client"
@@ -20,10 +19,7 @@ enum Role {
   USER
 }
 
-// Who may sign in. The office is small and everyone works on the same books, so
-// there are exactly two levels: ADMIN, who also manages the accounts, and USER,
-// who does the day's work. Per-module permissions can be added when someone
-// actually asks for them.
+// Two levels only: ADMIN also manages the accounts, USER does the day's work.
 model User {
   id       String @id @default(cuid())
   // Stored lowercase — "Administrator" and "administrator" are one account.
@@ -61,15 +57,19 @@ model Company {
   // template draws its own CSS/SVG mark instead.
   logoUrl    String?
 
-  // Which quotation design this company prints on.
-  // Keys live in src/lib/quotation-templates/index.ts.
+  // Which design this company prints on — the same one serves its quotations
+  // and its bills. Keys live in src/lib/quotation-templates/index.ts.
   templateKey String @default("sams")
+
+  // 0 = charges none, and the bill form offers no GST row. Overridable per bill.
+  defaultGstPercent Decimal @default(0) @db.Decimal(5, 2)
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   quotations Quotation[]
+  bills      Bill[]
 }
 
 // Shared across all companies — the same customer can buy from any of them.
@@ -87,6 +87,7 @@ model Customer {
   updatedAt     DateTime @updatedAt
 
   quotations Quotation[]
+  bills      Bill[]
 
   @@index([name])
 }
@@ -102,7 +103,8 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  items QuotationItem[]
+  items     QuotationItem[]
+  billItems BillItem[]
 
   @@index([name])
 }
@@ -148,6 +150,8 @@ model Quotation {
   company  Company         @relation(fields: [companyId], references: [id])
   customer Customer        @relation(fields: [customerId], references: [id])
   items    QuotationItem[]
+  // Not constrained to one: an order shipped in parts is billed in parts.
+  bills    Bill[]
 
   @@unique([companyId, number])
   @@index([companyId, date])
@@ -172,4 +176,101 @@ model QuotationItem {
   product   Product?  @relation(fields: [productId], references: [id])
 
   @@index([quotationId])
+}
+
+enum BillStatus {
+  DRAFT
+  ISSUED
+  PAID
+  CANCELLED
+}
+
+/// A bill starts life as a copy of an accepted quotation — copy, not a link:
+/// editing that quotation next month must not rewrite a bill already in the
+/// customer's hands. `quotationId` records where it came from, nothing more.
+///
+/// The difference from a quotation is the charges: cartage, GST, labour,
+/// discount — see BillCharge.
+model Bill {
+  id String @id @default(cuid())
+  // Sequence within its own company, zero padded, and separate from the
+  // quotation sequence. Printed as SAMS-B-0001 so it is never mistaken for
+  // quotation SAMS-0001.
+  number      String
+  companyId   String
+  customerId  String
+  // Null when the bill was typed from scratch rather than billed from a
+  // quotation. Survives the quotation being deleted — see onDelete below.
+  quotationId String?
+
+  date    DateTime   @default(now())
+  dueDate DateTime?
+  status  BillStatus @default(DRAFT)
+
+  poNumber String?
+  dcNumber String?
+  notes    String?
+  terms    String?
+
+  // Stored, not computed on read, for the same reason as on a quotation: this
+  // is a record of what was charged.
+  subtotal     Decimal @default(0) @db.Decimal(14, 2) // lines only
+  chargesTotal Decimal @default(0) @db.Decimal(14, 2) // every BillCharge added up
+  total        Decimal @default(0) @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id])
+  customer  Customer   @relation(fields: [customerId], references: [id])
+  // SetNull, not Cascade: a bill is its own document. Deleting the quotation it
+  // came from loses the cross-reference, never the bill.
+  quotation Quotation? @relation(fields: [quotationId], references: [id], onDelete: SetNull)
+
+  items   BillItem[]
+  charges BillCharge[]
+
+  @@unique([companyId, number])
+  @@index([companyId, date])
+  @@index([customerId])
+  @@index([quotationId])
+}
+
+model BillItem {
+  id        String  @id @default(cuid())
+  billId    String
+  productId String?
+  // Snapshot, as on a quotation line.
+  description String
+  unit        String
+  quantity    Decimal @db.Decimal(14, 3)
+  rate        Decimal @db.Decimal(14, 2)
+  amount      Decimal @db.Decimal(14, 2)
+  sortOrder   Int     @default(0)
+
+  bill    Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([billId])
+}
+
+/// Anything added to the lines: GST, cartage, labour, or a negative discount.
+/// A table rather than fixed columns because the client's own bill formats
+/// disagree about which charges exist — the next one should cost a row, not a
+/// migration.
+model BillCharge {
+  id     String @id @default(cuid())
+  billId String
+  label  String // printed as-is: "GST 18%", "Cartage", "Discount"
+  // Set when the charge is a percentage of the subtotal; null when it is a flat
+  // figure. Kept so re-opening the bill shows "18" in the % box again.
+  percent Decimal? @db.Decimal(5, 2)
+  // Always stored, even for a percentage: resolved once at save time, so a later
+  // edit to the lines never silently restates an issued bill.
+  amount    Decimal @db.Decimal(14, 2)
+  sortOrder Int     @default(0)
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
 }

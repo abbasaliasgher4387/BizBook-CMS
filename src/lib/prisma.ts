@@ -15,15 +15,12 @@ function createPrismaClient() {
   return new PrismaClient({
     adapter: new PrismaPg({
       connectionString,
-      // Supabase's pooler closes connections it considers idle. A pool that
-      // holds them longer than the server does will eventually hand out a dead
-      // socket, which surfaces as "Can't reach database server" on a page that
-      // worked minutes earlier — after a laptop sleeps, for instance. Letting
-      // go first is cheaper than reconnecting mid-request.
+      // Supabase's pooler drops idle connections. Holding them longer than the
+      // server does hands out a dead socket — "Can't reach database server" on
+      // a page that worked minutes ago.
       idleTimeoutMillis: 10_000,
       keepAlive: true,
-      // Small on purpose: the free pooler has few slots, and this app serves
-      // one office, not a public site.
+      // The free pooler has few slots, and this serves one office.
       max: 5,
       // Fail with a real error instead of hanging a page for a minute.
       connectionTimeoutMillis: 15_000,

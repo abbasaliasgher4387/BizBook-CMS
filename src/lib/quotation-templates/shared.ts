@@ -1,40 +1,57 @@
-import type { QuotationDoc } from "./types";
+import type { DocKind, SheetDoc } from "./types";
 
 export type TotalLine = { label: string; value: number; strong?: boolean };
 
 /**
- * The totals block, in the order the client's own bills print it:
- * Sub Total -> GST -> Cartage -> Total.
- *
- * GST and Cartage rows disappear when they are zero, which is how one field set
- * serves the companies that charge GST and the ones that do not.
- *
- * Labels differ per company — Al Mufaddal's own bills say "G-Total Amount"
- * rather than "Total" — so each template passes its own.
+ * Sub Total -> each charge -> Total, the order the client's own bills use. A
+ * quotation has no charges, so it prints the total alone. The final label
+ * differs per company (Al Mufaddal says "G-Total Amount"), so designs pass it.
  */
-export function totalLines(
-  doc: QuotationDoc,
-  labels: { sub?: string; gst?: string; cartage?: string; total?: string } = {},
-): TotalLine[] {
+export function totalLines(doc: SheetDoc, labels: { sub?: string; total?: string } = {}): TotalLine[] {
   const lines: TotalLine[] = [];
-  const hasExtras = doc.gstPercent > 0 || doc.cartage > 0;
 
-  if (hasExtras) lines.push({ label: labels.sub ?? "Sub Total", value: doc.subtotal });
-  if (doc.gstPercent > 0) {
-    lines.push({
-      label: labels.gst ?? `GST ${trimPercent(doc.gstPercent)}%`,
-      value: doc.gstAmount,
-    });
+  if (doc.charges.length > 0) {
+    lines.push({ label: labels.sub ?? "Sub Total", value: doc.subtotal });
+    for (const c of doc.charges) lines.push({ label: c.label, value: c.amount });
   }
-  if (doc.cartage > 0) lines.push({ label: labels.cartage ?? "Cartage", value: doc.cartage });
 
   lines.push({ label: labels.total ?? "Total", value: doc.total, strong: true });
   return lines;
 }
 
-/** 18 -> "18", 17.5 -> "17.5" — nobody prints "18.00%". */
-export function trimPercent(p: number): string {
-  return String(Number(p.toFixed(2)));
+/**
+ * The handful of words that make the same sheet read as a quotation or as a
+ * bill. Kept here rather than in each design so the wording is one edit, and so
+ * a new design cannot accidentally call a bill a quotation.
+ *
+ * Designs apply their own casing — SAMS prints the title in caps with wide
+ * tracking, the rest print it as written.
+ */
+export function docWords(kind: DocKind) {
+  const bill = kind === "BILL";
+  return {
+    /** The heading across the sheet. */
+    title: bill ? "Bill" : "Quotation",
+    /** Label beside the document number. */
+    ref: bill ? "Bill #" : "Quotation #",
+    /** Label beside `doc.until`. */
+    until: bill ? "Due Date" : "Valid Until",
+    /** Heading over the customer block, where a design uses one. */
+    to: bill ? "Bill To" : "Quotation To",
+  };
+}
+
+/**
+ * The reference as it is printed, filed and named: SAMS-0001 for a quotation,
+ * SAMS-B-0001 for a bill.
+ *
+ * Bills carry their own sequence, so without the B both documents would reach
+ * 0001 and a customer holding one of each would be looking at the same number on
+ * two different sheets. One function, so no design can disagree — and the PDF
+ * filename uses it too.
+ */
+export function docRef(doc: SheetDoc): string {
+  return `${doc.company.code}-${doc.kind === "BILL" ? "B-" : ""}${doc.number}`;
 }
 
 /** Joins the bits of a contact line, dropping whatever the company hasn't set. */

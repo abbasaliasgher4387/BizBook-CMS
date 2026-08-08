@@ -4,10 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint",
-    "check:mobile": "node scripts/check-mobile.mjs"
+    "check:mobile": "node scripts/check-mobile.mjs",
+    "check:filters": "node scripts/check-filters.mjs",
+    "check:money": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-money.mjs",
+    "check:bills": "node scripts/check-bills.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

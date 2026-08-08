@@ -1,8 +1,12 @@
 "use client";
 
+// One form for both documents, switched by `kind`, rather than two drifting
+// apart every time a field is added. The bill adds one panel: charges.
 import { useState } from "react";
 import { btn, fieldLabel, inputClass, sectionLabel, textareaClass } from "@/components/ui";
-import { money, round2 } from "@/lib/format";
+import { BILL_STATUSES, QUOTATION_STATUSES } from "@/lib/app";
+import { chargeLine, chargeValue, money, round2 } from "@/lib/format";
+import type { DocKind } from "@/lib/quotation-templates/types";
 
 export type ItemValues = {
   productId: string;
@@ -12,26 +16,39 @@ export type ItemValues = {
   rate: string;
 };
 
-export type QuotationFormValues = {
+/** A charge is either a percentage of the subtotal or a flat figure — never
+    both. An empty `percent` means the typed `amount` is used as it stands. */
+export type ChargeValues = {
+  label: string;
+  percent: string;
+  amount: string;
+};
+
+export type DocumentFormValues = {
   id?: string;
+  /** Bills only, and only when this one was billed from a quotation. */
+  quotationId?: string;
   companyId: string;
   customerId: string;
   date: string; // yyyy-mm-dd
-  validUntil: string;
+  /** Valid-until on a quotation, due date on a bill. */
+  until: string;
   status: string;
   poNumber: string;
   dcNumber: string;
   notes: string;
   terms: string;
   items: ItemValues[];
+  charges: ChargeValues[];
 };
 
 type Option = { id: string; name: string; code?: string | null };
 type ProductOption = { id: string; name: string; unit: string; defaultRate: number };
 
-const STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED"];
-
-export const emptyItem: ItemValues = { productId: "", description: "", unit: "pcs", quantity: "1", rate: "0" };
+const emptyItem: ItemValues = { productId: "", description: "", unit: "pcs", quantity: "1", rate: "0" };
+/** Amount starts empty, not "0": a new row is typed into, and a zero sitting in
+    the box means the first figure typed lands beside it — 4500 becomes 45000. */
+const emptyCharge: ChargeValues = { label: "", percent: "", amount: "" };
 
 /** The item table's column heading. Sits on the same 12-column grid as a row,
     so every heading is directly above the field it names. */
@@ -48,7 +65,14 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-export default function QuotationForm({
+/** The typed row read as numbers, then through the same rule the server uses. */
+function chargeAmount(c: ChargeValues, subtotal: number): number {
+  const pct = c.percent.trim();
+  return chargeValue(pct === "" ? null : Number(pct), Number(c.amount || 0), subtotal);
+}
+
+export default function DocumentForm({
+  kind,
   action,
   companies,
   customers,
@@ -56,24 +80,33 @@ export default function QuotationForm({
   values,
   submitLabel,
 }: {
+  kind: DocKind;
   action: (formData: FormData) => void;
   companies: Option[];
   customers: Option[];
   products: ProductOption[];
-  values: QuotationFormValues;
+  values: DocumentFormValues;
   submitLabel: string;
 }) {
+  const bill = kind === "BILL";
   const [items, setItems] = useState<ItemValues[]>(values.items.length ? values.items : [emptyItem]);
+  const [charges, setCharges] = useState<ChargeValues[]>(values.charges);
 
   const isEdit = Boolean(values.id);
 
-  // Same arithmetic as the server action, so what is shown here is what is saved.
-  // A quotation is the lines and nothing else — GST and cartage belong to a bill,
-  // so they are not asked for here and save as 0.
+  // Same arithmetic as the server action, so what is shown here is what is
+  // saved. A quotation is the lines and nothing else; a bill adds its charges.
   const subtotal = round2(items.reduce((sum, it) => sum + Number(it.quantity || 0) * Number(it.rate || 0), 0));
+  const chargeRows = charges.map((c) => chargeAmount(c, subtotal));
+  const chargesTotal = round2(chargeRows.reduce((sum, n) => sum + n, 0));
+  const total = round2(subtotal + (bill ? chargesTotal : 0));
 
   function patch(index: number, changes: Partial<ItemValues>) {
     setItems((rows) => rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
+  }
+
+  function patchCharge(index: number, changes: Partial<ChargeValues>) {
+    setCharges((rows) => rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
   }
 
   function pickProduct(index: number, productId: string) {
@@ -88,6 +121,7 @@ export default function QuotationForm({
   return (
     <form action={action} className="space-y-4">
       {values.id && <input type="hidden" name="id" value={values.id} />}
+      {values.quotationId && <input type="hidden" name="quotationId" value={values.quotationId} />}
 
       <Panel title="Details">
         <div className="grid gap-x-4 gap-y-3 p-4 sm:grid-cols-3">
@@ -134,13 +168,13 @@ export default function QuotationForm({
             <input type="date" name="date" className={inputClass} defaultValue={values.date} />
           </label>
           <label className="block">
-            <span className={fieldLabel}>Valid until</span>
-            <input type="date" name="validUntil" className={inputClass} defaultValue={values.validUntil} />
+            <span className={fieldLabel}>{bill ? "Due date" : "Valid until"}</span>
+            <input type="date" name="until" className={inputClass} defaultValue={values.until} />
           </label>
           <label className="block">
             <span className={fieldLabel}>Status</span>
             <select name="status" className={inputClass} defaultValue={values.status}>
-              {STATUSES.map((s) => (
+              {(bill ? BILL_STATUSES : QUOTATION_STATUSES).map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -253,6 +287,81 @@ export default function QuotationForm({
         </div>
       </Panel>
 
+      {bill && (
+        <Panel title="Charges">
+          {charges.length > 0 && (
+            <div className="hidden gap-2 border-b border-line bg-canvas/60 px-3 py-1.5 sm:grid sm:grid-cols-12">
+              <span className={`${COL} px-2.5 sm:col-span-6`}>Charge</span>
+              <span className={`${COL} px-2.5 text-right sm:col-span-2`}>% of subtotal</span>
+              <span className={`${COL} px-2.5 text-right sm:col-span-3`}>Amount</span>
+              <span className="sm:col-span-1" />
+            </div>
+          )}
+
+          {charges.map((row, i) => {
+            // A percentage owns the amount box: typing in it would be ignored on
+            // save, so the figure is shown as the answer rather than offered as
+            // a field.
+            const byPercent = row.percent.trim() !== "";
+            return (
+              <div
+                key={i}
+                className="grid items-center gap-2 border-b border-line-2 px-3 py-2 last:border-0 sm:grid-cols-12"
+              >
+                <input
+                  name="chargeLabel"
+                  aria-label={`Charge ${i + 1} name`}
+                  placeholder="GST, Cartage, Labour, Discount…"
+                  className={`${inputClass} sm:col-span-6`}
+                  value={row.label}
+                  onChange={(e) => patchCharge(i, { label: e.target.value })}
+                />
+                <input
+                  name="chargePercent"
+                  aria-label={`Charge ${i + 1} percentage`}
+                  type="number"
+                  step="0.01"
+                  placeholder="—"
+                  className={`${inputClass} tnum text-right sm:col-span-2`}
+                  value={row.percent}
+                  onChange={(e) => patchCharge(i, { percent: e.target.value })}
+                />
+                <input
+                  name="chargeAmount"
+                  aria-label={`Charge ${i + 1} amount`}
+                  type="number"
+                  step="0.01"
+                  readOnly={byPercent}
+                  className={`${inputClass} tnum text-right sm:col-span-3 ${byPercent ? "bg-canvas text-ink-2" : ""}`}
+                  value={byPercent ? String(chargeRows[i]) : row.amount}
+                  onChange={(e) => patchCharge(i, { amount: e.target.value })}
+                />
+                <span className="flex justify-end sm:col-span-1">
+                  <button
+                    type="button"
+                    aria-label={`Remove charge ${i + 1}`}
+                    className="grid h-7 w-7 place-items-center rounded-[4px] text-[16px] leading-none text-ink-3 transition-colors hover:bg-red-50 hover:text-danger"
+                    onClick={() => setCharges((rows) => rows.filter((_, x) => x !== i))}
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
+            );
+          })}
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-3 py-2.5">
+            <button type="button" className={btn.ghost} onClick={() => setCharges((rows) => [...rows, emptyCharge])}>
+              Add charge
+            </button>
+            <p className="max-w-lg text-[11.5px] leading-snug text-ink-3">
+              Fill the percentage for GST and the like; leave it blank and type a figure for cartage. A negative amount
+              is a discount. A charge with no name is dropped.
+            </p>
+          </div>
+        </Panel>
+      )}
+
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Panel title="Printed on the document">
           <div className="space-y-3 p-4">
@@ -269,11 +378,40 @@ export default function QuotationForm({
 
         <Panel title="Total">
           <dl className="p-4 text-[13px]">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-[14px] font-semibold">Subtotal</dt>
-              <dd className="tnum text-[16px] font-semibold">{money(subtotal)}</dd>
-            </div>
-            <dd className="mt-1 text-[11.5px] text-ink-3">The lines added up. Nothing else is added.</dd>
+            {bill ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-ink-2">Subtotal</dt>
+                  <dd className="tnum">{money(subtotal)}</dd>
+                </div>
+                {charges.map((c, i) => (
+                  <div key={i} className="mt-1 flex items-center justify-between gap-3">
+                    {/* Exactly how the sheet will word it — the rate is part of
+                        the printed line, not of the name that was typed. */}
+                    <dt className="truncate text-ink-2">
+                      {c.label.trim()
+                        ? chargeLine(c.label.trim(), c.percent.trim() === "" ? null : Number(c.percent))
+                        : "Unnamed charge — will be dropped"}
+                    </dt>
+                    <dd className="tnum">{money(chargeRows[i])}</dd>
+                  </div>
+                ))}
+                <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-line pt-2.5">
+                  <dt className="text-[14px] font-semibold">Total</dt>
+                  <dd className="tnum text-[16px] font-semibold">{money(total)}</dd>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[14px] font-semibold">Subtotal</dt>
+                  <dd className="tnum text-[16px] font-semibold">{money(subtotal)}</dd>
+                </div>
+                <dd className="mt-1 text-[11.5px] text-ink-3">
+                  The lines added up. Cartage and GST are charged on the bill.
+                </dd>
+              </>
+            )}
           </dl>
         </Panel>
       </div>

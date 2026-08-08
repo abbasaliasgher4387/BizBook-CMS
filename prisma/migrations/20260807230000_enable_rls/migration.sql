@@ -14,4 +14,14 @@ ALTER TABLE "Customer" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Product" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Quotation" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "QuotationItem" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "_prisma_migrations" ENABLE ROW LEVEL SECURITY;
+
+-- Prisma's own bookkeeping table, guarded because it is the one table here that
+-- is not always present when this runs: on the shadow database Prisma builds to
+-- plan a new migration, the history table does not exist yet, and a bare ALTER
+-- aborts every future `migrate dev` with "relation does not exist".
+DO $$
+BEGIN
+  IF to_regclass('public._prisma_migrations') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE "_prisma_migrations" ENABLE ROW LEVEL SECURITY';
+  END IF;
+END $$;

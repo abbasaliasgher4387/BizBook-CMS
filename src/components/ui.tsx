@@ -1,9 +1,9 @@
-// Presentational helpers so the CRUD pages stay short. Deliberately not a
-// component library: exported class strings plus a handful of components.
+// Shared class strings and a handful of components.
 //
-// The rule that keeps rows straight: every control in the app — button, link
-// styled as a button, input, select — is exactly 32px tall and shares the same
-// radius. Put any of them next to any other and they line up without a wrapper.
+// The rule that keeps rows straight: every control — button, input, select — is
+// 32px tall with the same radius, so any two line up without a wrapper.
+import Link from "next/link";
+import type { ListFilters } from "@/lib/list-filters";
 import { swatchFor } from "@/lib/quotation-templates";
 
 const CONTROL =
@@ -13,8 +13,7 @@ export const btn = {
   primary: `${CONTROL} bg-accent text-white hover:bg-accent-hover`,
   ghost: `${CONTROL} border border-line bg-paper text-ink hover:bg-canvas`,
   danger: `${CONTROL} border border-line bg-paper text-danger hover:border-danger/40 hover:bg-red-50`,
-  /** Table-row scale. Same shape, one notch down, so a row never out-shouts the
-      page's own actions. */
+  /** Table-row scale — one notch down, so a row never out-shouts the page. */
   row: "inline-flex h-7 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-[4px] border border-line bg-paper px-2 text-[12px] font-medium text-ink-2 transition-colors hover:bg-canvas hover:text-ink",
 };
 
@@ -35,8 +34,7 @@ export const th = "px-3 py-2 text-left text-[10.5px] font-semibold uppercase tra
 export const td = "px-3 py-2 align-middle";
 export const tr = "border-b border-line-2 last:border-0 hover:bg-canvas/50";
 
-/** A ruled sheet — the thing this software exists to produce. Sized by the
-    caller, because the sidebar wears it small and the login screen does not. */
+/** Sized by the caller: the rail wears it small, the login screen large. */
 export function BrandMark({ className = "h-7 w-7" }: { className?: string }) {
   return (
     <span
@@ -65,8 +63,6 @@ export function PageHeader({
         <h1 className="text-[17px] font-semibold leading-tight tracking-[-0.01em]">{title}</h1>
         {subtitle && <p className="mt-1 max-w-2xl text-[12.5px] leading-snug text-ink-2">{subtitle}</p>}
       </div>
-      {/* Every page's actions land here, in the same order and the same
-          alignment: secondary first, primary last. */}
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </div>
   );
@@ -139,12 +135,19 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
   );
 }
 
+/* Both documents' statuses in one map. Blue is out with the customer, green is
+   settled, red is dead, amber is running out of time. */
 const BADGE: Record<string, string> = {
   DRAFT: "border-line bg-canvas text-ink-2",
+  // Quotation
   SENT: "border-blue-200 bg-blue-50 text-blue-800",
   ACCEPTED: "border-emerald-200 bg-emerald-50 text-emerald-800",
   REJECTED: "border-red-200 bg-red-50 text-red-800",
   EXPIRED: "border-amber-200 bg-amber-50 text-amber-800",
+  // Bill
+  ISSUED: "border-blue-200 bg-blue-50 text-blue-800",
+  PAID: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  CANCELLED: "border-red-200 bg-red-50 text-red-800",
 };
 
 export function Badge({ status }: { status: string }) {
@@ -159,9 +162,132 @@ export function Badge({ status }: { status: string }) {
   );
 }
 
-/** A company's mark. Its real logo once a file is set on the company; until
-    then its code in the company's own letterhead colour — the same colour that
-    comes off the printer, so a row is recognised before it is read. */
+/* --------------------------------------- the two list pages' shared chrome */
+
+function Tab({
+  href,
+  active,
+  label,
+  count,
+  swatch,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+  count: number;
+  swatch?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[5px] border px-2.5 text-[12.5px] font-medium transition-colors ${
+        active ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:bg-canvas"
+      }`}
+    >
+      {swatch && <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: swatch }} />}
+      {label}
+      <span className={`tnum text-[11px] ${active ? "text-white/60" : "text-ink-3"}`}>{count}</span>
+    </Link>
+  );
+}
+
+/** The counts are each company's whole total, and a tab's address drops the
+    filter row, so the number on a tab is exactly what clicking it will show.
+    The filtered figure lives in the "N of M shown" line instead. */
+export function CompanyTabs({
+  base,
+  companies,
+  selected,
+  total,
+}: {
+  base: string;
+  companies: { id: string; code: string; templateKey: string; count: number }[];
+  selected: string;
+  total: number;
+}) {
+  if (companies.length < 2) return null;
+
+  return (
+    <nav aria-label="Filter by company" className="mb-3 flex flex-wrap items-center gap-1.5">
+      <Tab href={base} active={!selected} label="All companies" count={total} />
+      {companies.map((c) => (
+        <Tab
+          key={c.id}
+          href={`${base}?company=${c.id}`}
+          active={selected === c.id}
+          label={c.code}
+          count={c.count}
+          swatch={swatchFor(c.templateKey)}
+        />
+      ))}
+    </nav>
+  );
+}
+
+/** A plain GET form: the address bar holds the whole state, so Back works and
+    a filtered list can be bookmarked or sent to somebody. */
+export function FilterRow({
+  action,
+  filters,
+  statuses,
+}: {
+  action: string;
+  filters: ListFilters;
+  statuses: readonly string[];
+}) {
+  return (
+    <form method="get" action={action} className="mb-3 flex flex-wrap items-end gap-2">
+      {/* Without this, applying a filter jumps back to All companies. */}
+      {filters.company && <input type="hidden" name="company" value={filters.company} />}
+
+      <label className="min-w-[10.5rem] flex-1">
+        <span className={fieldLabel}>Search</span>
+        <input
+          name="q"
+          type="search"
+          defaultValue={filters.q}
+          placeholder="Customer or number"
+          className={inputClass}
+        />
+      </label>
+
+      <label className="w-[8.5rem]">
+        <span className={fieldLabel}>Status</span>
+        <select name="status" defaultValue={filters.status} className={inputClass}>
+          <option value="">Any status</option>
+          {statuses.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="w-[9rem]">
+        <span className={fieldLabel}>From</span>
+        <input name="from" type="date" defaultValue={filters.fromText} className={inputClass} />
+      </label>
+
+      <label className="w-[9rem]">
+        <span className={fieldLabel}>To</span>
+        <input name="to" type="date" defaultValue={filters.toText} className={inputClass} />
+      </label>
+
+      <div className="flex items-center gap-2">
+        {filters.active && (
+          <Link href={filters.company ? `${action}?company=${filters.company}` : action} className={btn.ghost}>
+            Clear
+          </Link>
+        )}
+        <button className={btn.primary}>Apply</button>
+      </div>
+    </form>
+  );
+}
+
+/** The company's real logo once one is set, otherwise its code in the same
+    letterhead colour that comes off the printer. */
 export function CompanyLogo({
   code,
   templateKey,

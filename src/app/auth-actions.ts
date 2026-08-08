@@ -1,19 +1,24 @@
 "use server";
 
-// Signing in, and the admin's control over who else can. Kept apart from
-// actions.ts because every function here is a trust boundary: each one states
-// who is allowed to call it on its first line.
+// Every function here is a trust boundary: each states who may call it on its
+// first line.
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  MAX_PASSWORD,
   MIN_PASSWORD,
   checkPassword,
+  clearFailures,
   endSession,
   hashPassword,
+  isLockedOut,
+  recordFailure,
   requireAdmin,
   requireUser,
   startSession,
   verifyPassword,
+  wasteVerification,
 } from "@/lib/auth";
 import { text } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -24,31 +29,55 @@ function readUsername(fd: FormData): string {
   const username = String(fd.get("username") ?? "")
     .trim()
     .toLowerCase();
-  if (!/^[a-z0-9._-]{3,}$/.test(username)) {
-    throw new Error("Username must be at least 3 characters: letters, numbers, dot, dash or underscore only.");
+  // Bounded at both ends: an unbounded field is a row nobody meant to store.
+  if (!/^[a-z0-9._-]{3,64}$/.test(username)) {
+    throw new Error("Username must be 3 to 64 characters: letters, numbers, dot, dash or underscore only.");
   }
   return username;
 }
 
 /* --------------------------------------------------------------- signing in */
 
-/**
- * A wrong password is an ordinary thing to do, not a crash, so it comes back as
- * a line on the login page rather than an error screen. The reply is identical
- * whether the username exists or not — otherwise the form doubles as a way to
- * find out who works here.
- */
+/** Whoever is on the other end of this request, as far as it can be known. Only
+    ever used to count failures against, so a spoofed value costs its owner
+    attempts rather than buying any. */
+async function callerAddress(): Promise<string> {
+  const h = await headers();
+  return (h.get("x-forwarded-for")?.split(",")[0] ?? h.get("x-real-ip") ?? "unknown").trim().slice(0, 64);
+}
+
+/** A wrong password is ordinary, so it comes back as a line on the login page.
+    The reply is identical whether the username exists or not, or the form
+    doubles as a way to find out who works here. */
 export async function login(formData: FormData) {
   const username = String(formData.get("username") ?? "")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    // A username cannot be longer than this, so anything longer is not a typo.
+    // Cutting it here also keeps the throttle map's keys bounded.
+    .slice(0, 64);
   const password = String(formData.get("password") ?? "");
 
-  const user = await prisma.user.findUnique({ where: { username } });
-  if (!user || !user.isActive || !verifyPassword(password, user.passwordHash)) {
+  // Counted twice: by name, so one account cannot be ground down from a botnet,
+  // and by address, so one machine cannot work through the staff list.
+  const byName = `u:${username}`;
+  const byAddress = `ip:${await callerAddress()}`;
+  if (isLockedOut(byName) || isLockedOut(byAddress)) redirect("/login?error=locked");
+
+  const found = username ? await prisma.user.findUnique({ where: { username } }) : null;
+  const user = found && found.isActive ? found : null;
+  // Spend the scrypt even when there is nobody to check it against, so the two
+  // answers take the same time to come back — see wasteVerification.
+  if (!user) wasteVerification(password);
+
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    recordFailure(byName);
+    recordFailure(byAddress);
     redirect("/login?error=1");
   }
 
+  clearFailures(byName);
+  clearFailures(byAddress);
   await startSession(user);
   redirect("/");
 }
@@ -68,6 +97,7 @@ export async function changeMyPassword(formData: FormData) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: me.id } });
   if (!verifyPassword(current, user.passwordHash)) redirect("/account?error=wrong");
   if (next.length < MIN_PASSWORD) redirect("/account?error=short");
+  if (next.length > MAX_PASSWORD) redirect("/account?error=long");
   if (next === current) redirect("/account?error=same");
 
   const updated = await prisma.user.update({

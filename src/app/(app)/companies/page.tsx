@@ -15,7 +15,10 @@ export default async function CompaniesPage() {
 
   return (
     <>
-      <PageHeader title="Companies" subtitle="Open a company to change its details or the design it prints on.">
+      <PageHeader
+        title="Companies"
+        subtitle="Open a company to change its details, its default GST, or the design its quotations and bills print on."
+      >
         <Link href="/templates" className={btn.ghost}>
           View all designs
         </Link>
@@ -102,7 +105,7 @@ function CompanyForm({ company }: { company: Company | null }) {
 
         <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
           <Field label="Company name" name="name" required defaultValue={company?.name} className="sm:col-span-2" />
-          <Field label="Code (quotation prefix)" name="code" required defaultValue={company?.code} placeholder="SAMS" />
+          <Field label="Code (document prefix)" name="code" required defaultValue={company?.code} placeholder="SAMS" />
         </div>
 
         <label className="block">
@@ -126,6 +129,24 @@ function CompanyForm({ company }: { company: Company | null }) {
           <Field label="GST number" name="gstNumber" defaultValue={company?.gstNumber} />
         </div>
 
+        <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
+          <label className="block">
+            <span className={fieldLabel}>Default GST %</span>
+            <input
+              name="defaultGstPercent"
+              type="number"
+              step="0.01"
+              min="0"
+              className={`${inputClass} tnum`}
+              defaultValue={String(Number(company?.defaultGstPercent ?? 0))}
+            />
+            <span className="mt-1 block text-[11px] leading-snug text-ink-3">
+              What a new bill for this company starts its GST line at. 0 means no GST line. It can be changed or
+              removed on any individual bill.
+            </span>
+          </label>
+        </div>
+
         <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
           <label className="block">
             <span className={fieldLabel}>Logo file</span>
@@ -139,7 +160,7 @@ function CompanyForm({ company }: { company: Company | null }) {
           </label>
 
           <label className="block">
-            <span className={fieldLabel}>Quotation design</span>
+            <span className={fieldLabel}>Document design</span>
             <select name="templateKey" className={inputClass} defaultValue={company?.templateKey ?? "sams"}>
               {TEMPLATE_KEYS.map((key) => (
                 <option key={key} value={key}>

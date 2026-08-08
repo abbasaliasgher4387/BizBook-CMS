@@ -1,13 +1,15 @@
-// Every quotation design, full size, one per sheet. This page exists only to be
-// printed — the gallery at /templates scales its previews down to fit on screen,
-// which is exactly what a PDF must not do.
+// Every design full size, one per sheet. Printing only: /templates scales its
+// previews down to fit a screen, which a PDF must never do. `?kind=bill` prints
+// them as bills.
 import { prisma } from "@/lib/prisma";
 import { TEMPLATES, TEMPLATE_KEYS } from "@/lib/quotation-templates";
-import { SAMPLE_DOC } from "@/lib/quotation-templates/types";
+import { sampleDoc } from "@/lib/quotation-templates/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function PrintDesignsPage() {
+export default async function PrintDesignsPage(props: PageProps<"/print/designs">) {
+  const sp = await props.searchParams;
+  const sample = sampleDoc(sp.kind === "bill" ? "BILL" : "QUOTATION");
   const companies = await prisma.company.findMany();
   const byTemplate = new Map(companies.map((c) => [c.templateKey, c]));
 
@@ -17,7 +19,7 @@ export default async function PrintDesignsPage() {
         const { label, Component } = TEMPLATES[key];
         const real = byTemplate.get(key);
         const doc = {
-          ...SAMPLE_DOC,
+          ...sample,
           company: real
             ? {
                 name: real.name,
@@ -31,7 +33,7 @@ export default async function PrintDesignsPage() {
                 gstNumber: real.gstNumber,
                 logoUrl: real.logoUrl,
               }
-            : { ...SAMPLE_DOC.company, name: label },
+            : { ...sample.company, name: label },
         };
 
         return (

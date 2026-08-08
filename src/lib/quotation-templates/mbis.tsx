@@ -5,7 +5,7 @@
 // rules, which keeps it clearly apart from Bizway's centred green sheet.
 import { money, qty, shortDate } from "@/lib/format";
 import { plexSans } from "./fonts";
-import { join, totalLines } from "./shared";
+import { docRef, docWords, join, totalLines } from "./shared";
 import type { TemplateProps } from "./types";
 
 const TEAL = "#1B7C8C";
@@ -14,6 +14,7 @@ const BAND = "#D5DBDD";
 export default function Mbis({ doc }: TemplateProps) {
   const { company, customer, items } = doc;
   const totals = totalLines(doc);
+  const w = docWords(doc.kind);
 
   return (
     <div
@@ -54,7 +55,7 @@ export default function Mbis({ doc }: TemplateProps) {
         {/* ---- title, left aligned over a long teal rule ---- */}
         <div className="mt-8">
           <h2 className="text-[15pt] font-bold uppercase tracking-[0.3em]" style={{ color: TEAL }}>
-            Quotation
+            {w.title}
           </h2>
           <div className="mt-1 h-[3px] w-full" style={{ backgroundColor: TEAL }} />
         </div>
@@ -63,7 +64,7 @@ export default function Mbis({ doc }: TemplateProps) {
         <section className="mt-5 flex items-start justify-between gap-8 text-[10pt]">
           <div className="max-w-[95mm]">
             <p className="mb-1 text-[8pt] font-semibold uppercase tracking-[0.2em]" style={{ color: TEAL }}>
-              Quotation To
+              {w.to}
             </p>
             <p className="text-[12pt] font-bold">{customer.name}</p>
             {customer.contactPerson && <p className="text-[#4c4c4c]">Attn: {customer.contactPerson}</p>}
@@ -74,9 +75,9 @@ export default function Mbis({ doc }: TemplateProps) {
 
           <table className="text-[9.5pt]">
             <tbody>
-              <Row label="Quotation #" value={`${company.code}-${doc.number}`} strong />
+              <Row label={w.ref} value={docRef(doc)} strong />
               <Row label="Date" value={shortDate(doc.date)} />
-              <Row label="Valid Until" value={shortDate(doc.validUntil)} />
+              <Row label={w.until} value={shortDate(doc.until)} />
               {doc.poNumber && <Row label="PO #" value={doc.poNumber} />}
               {doc.dcNumber && <Row label="DC #" value={doc.dcNumber} />}
             </tbody>

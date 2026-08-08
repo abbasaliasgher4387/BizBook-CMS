@@ -3,13 +3,14 @@
 // in order to change their own.
 import { changeMyPassword } from "@/app/auth-actions";
 import { Card, PageHeader, btn, fieldLabel, inputClass } from "@/components/ui";
-import { MIN_PASSWORD, requireUser } from "@/lib/auth";
+import { MAX_PASSWORD, MIN_PASSWORD, requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 const ERRORS: Record<string, string> = {
   wrong: "That is not your current password.",
   short: `The new password must be at least ${MIN_PASSWORD} characters long.`,
+  long: `The new password must be at most ${MAX_PASSWORD} characters long.`,
   same: "The new password is the same as the current one.",
 };
 

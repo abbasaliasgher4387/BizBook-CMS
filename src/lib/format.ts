@@ -27,6 +27,19 @@ export function qty(n: number): string {
   return String(Number(n.toFixed(3)));
 }
 
+/** 18 -> "18", 17.5 -> "17.5" — a bill says "GST 18%", never "GST 18.00%". */
+export function trimPercent(p: number): string {
+  return String(Number(p.toFixed(2)));
+}
+
+/**
+ * ("GST", 18) -> "GST 18%", ("Cartage", null) -> "Cartage". The rate lives in
+ * its own column, not the label, so correcting it also corrects what prints.
+ */
+export function chargeLine(label: string, percent: number | null): string {
+  return percent === null ? label : `${label} ${trimPercent(percent)}%`;
+}
+
 /** Date -> "06-Aug-2026" (read in UTC, so it never shifts a day) */
 export function shortDate(d: Date | string | null | undefined): string {
   if (!d) return "—";
@@ -55,6 +68,14 @@ export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+/**
+ * What one charge comes to. The form and the server both call this: the figure
+ * on screen has to be the figure that gets stored.
+ */
+export function chargeValue(percent: number | null, amount: number, subtotal: number): number {
+  return percent === null ? round2(amount) : round2((subtotal * percent) / 100);
+}
+
 /** Reads a form field as a number, treating blank/garbage as 0. */
 export function num(v: FormDataEntryValue | null): number {
   const n = Number(typeof v === "string" ? v.trim() : "");
@@ -65,6 +86,14 @@ export function num(v: FormDataEntryValue | null): number {
 export function text(v: FormDataEntryValue | null): string | null {
   const s = typeof v === "string" ? v.trim() : "";
   return s === "" ? null : s;
+}
+
+/** Required field, or the save stops with a message naming it. Lives here
+    because a "use server" module may only export async functions. */
+export function req(fd: FormData, key: string, label: string): string {
+  const v = String(fd.get(key) ?? "").trim();
+  if (!v) throw new Error(`${label} is required.`);
+  return v;
 }
 
 /** "Ahmed Traders" -> "AT" — stands in for a logo until the client sends real ones. */

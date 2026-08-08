@@ -1,7 +1,9 @@
 // The design registry. A company stores one of these keys in `templateKey`, and
-// that decides how its quotation prints. Every entry is copied from a letterhead
-// the client actually supplied — a company with no letterhead gets no design.
-// Adding one means one new file next to this one and one line in TEMPLATES.
+// that decides how its documents print — its quotations and its bills both, on
+// the same sheet; see docWords() in shared.ts for the handful of words that
+// differ between them. Every entry is copied from a letterhead the client
+// actually supplied — a company with no letterhead gets no design. Adding one
+// means one new file next to this one and one line in TEMPLATES.
 import AlBurhan from "./alburhan";
 import AlMufaddal from "./almufaddal";
 import Bizway from "./bizway";

@@ -2,7 +2,7 @@
 // black rule, and a stacked NTN/STRN/contact block at the foot of the page.
 import { money, qty, shortDate } from "@/lib/format";
 import { inter } from "./fonts";
-import { join, totalLines } from "./shared";
+import { docRef, docWords, join, totalLines } from "./shared";
 import type { TemplateProps } from "./types";
 
 const BLUE = "#1F3D8F";
@@ -10,6 +10,7 @@ const BLUE = "#1F3D8F";
 export default function Mistry({ doc }: TemplateProps) {
   const { company, customer, items } = doc;
   const totals = totalLines(doc);
+  const w = docWords(doc.kind);
 
   return (
     <div className={`${inter.className} flex w-[210mm] min-h-[297mm] print:min-h-0 flex-col bg-white px-[16mm] py-[12mm] text-[#111]`}>
@@ -40,17 +41,15 @@ export default function Mistry({ doc }: TemplateProps) {
       {/* ---- title, left aligned like the rest of the sheet ---- */}
       <div className="mt-8 flex items-end justify-between border-b-[3px] pb-1" style={{ borderColor: BLUE }}>
         <h2 className="text-[20pt] font-bold uppercase leading-none tracking-[0.15em]" style={{ color: BLUE }}>
-          Quotation
+          {w.title}
         </h2>
-        <p className="text-[11pt] font-bold">
-          No. {company.code}-{doc.number}
-        </p>
+        <p className="text-[11pt] font-bold">No. {docRef(doc)}</p>
       </div>
 
       {/* ---- meta as label/value pairs in two columns ---- */}
       <section className="mt-5 grid grid-cols-2 gap-x-10 gap-y-1 text-[10pt]">
         <Line label="Date" value={shortDate(doc.date)} />
-        <Line label="Valid Until" value={shortDate(doc.validUntil)} />
+        <Line label={w.until} value={shortDate(doc.until)} />
         {doc.poNumber && <Line label="P.O #" value={doc.poNumber} />}
         {doc.dcNumber && <Line label="DC #" value={doc.dcNumber} />}
       </section>

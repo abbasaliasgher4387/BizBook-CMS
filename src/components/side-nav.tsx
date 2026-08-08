@@ -1,16 +1,8 @@
 "use client";
 
-// The only place navigation is defined. Adding a module — Bills, then Ledger,
-// then whatever follows — means adding one group to navFor() and nothing else:
-// the sidebar, the active-item logic and the small-screen menu all read from it.
-//
-// On a wide screen the rail is 56px of icons and gets out of the way. Point at
-// it and it opens to 224px *over* the page rather than pushing it, so nothing
-// reflows and the table you were reading stays where it was. Pure CSS hover —
-// no state, no toggle to remember, nothing to get stuck open.
-//
-// A phone gets the same list on the same principle — over the page, not shoving
-// it down. See the drawer at the foot of this file.
+// The only place navigation is defined: a new module means one new group in
+// navFor() and nothing else. The rail, the drawer and the active-item logic all
+// read from it.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
@@ -21,8 +13,6 @@ import type { SessionUser } from "@/lib/auth";
 
 /* -------------------------------------------------------------------- icons */
 
-// Drawn here rather than pulled from an icon package: nine glyphs do not earn a
-// dependency. One line weight, one 24px box, so they sit on the same rhythm.
 const ICONS: Record<string, React.ReactNode> = {
   dashboard: (
     <>
@@ -44,6 +34,18 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
       <path d="M14 3v5h5" />
       <path d="M12 12.5v5M9.5 15h5" />
+    </>
+  ),
+  receipt: (
+    <>
+      <path d="M5 21V4.5a1 1 0 0 1 1.5-.87L9 5l2.5-1.4a1 1 0 0 1 1 0L15 5l2.5-1.37A1 1 0 0 1 19 4.5V21l-2.5-1.4a1 1 0 0 0-1 0L13 21l-2.5-1.4a1 1 0 0 0-1 0Z" />
+      <path d="M9 9.5h6M9 13.5h4" />
+    </>
+  ),
+  receiptPlus: (
+    <>
+      <path d="M5 21V4.5a1 1 0 0 1 1.5-.87L9 5l2.5-1.4a1 1 0 0 1 1 0L15 5l2.5-1.37A1 1 0 0 1 19 4.5V21l-2.5-1.4a1 1 0 0 0-1 0L13 21l-2.5-1.4a1 1 0 0 0-1 0Z" />
+      <path d="M12 9.5v5M9.5 12h5" />
     </>
   ),
   people: (
@@ -119,10 +121,16 @@ function navFor(role: SessionUser["role"]): Group[] {
       ],
     },
     {
+      label: "Bills",
+      items: [
+        { href: "/bills", label: "All bills", icon: "receipt" },
+        { href: "/bills/new", label: "New bill", icon: "receiptPlus" },
+      ],
+    },
+    {
       label: "Records",
-      // Products is hidden on purpose, not deleted: /products still works and a
-      // quotation line can still pick a saved product. Put the entry back here
-      // when the module is wanted in the sidebar again.
+      // Products is hidden, not deleted: /products still works and a quotation
+      // line can still pick a saved product.
       items: [{ href: "/customers", label: "Customers", icon: "people" }],
     },
     {
@@ -140,8 +148,8 @@ function navFor(role: SessionUser["role"]): Group[] {
   return groups;
 }
 
-/** The longest matching href wins, so /quotations/new does not also light up
-    "All quotations", and /quotations/<id> still lights up "All quotations". */
+/** Longest matching href wins, so /quotations/new does not also light up
+    "All quotations". */
 function activeHref(nav: Group[], path: string): string {
   return (
     nav
@@ -151,13 +159,11 @@ function activeHref(nav: Group[], path: string): string {
   );
 }
 
-/* Every horizontal measurement in the rail lands the glyph on the same centre
-   line, 28px in — which is the middle of the 56px collapsed rail. Change one of
-   these and the icons stop lining up as the rail opens. */
+/* Lands every glyph 28px in — the middle of the collapsed 56px rail. Change
+   these and the icons stop lining up as it opens. */
 const ITEM = "flex h-9 items-center gap-3 rounded-[5px] px-[11px]";
-/** Text is present in the DOM at all times, for screen readers and for search;
-    collapsed it is simply clipped and faded, and it fades in a beat after the
-    rail has started opening so it never smears across the animation. */
+/** The text stays in the DOM for screen readers; collapsed it is only clipped
+    and faded. */
 const HIDES = "whitespace-nowrap opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 group-hover/rail:delay-100";
 
 function Brand({ rail }: { rail: boolean }) {
@@ -218,44 +224,58 @@ function NavList({ nav, path, rail }: { nav: Group[]; path: string; rail: boolea
   );
 }
 
-/** Who is signed in, and the two things they can do about it. Sits at the foot
-    of the rail because it is the last thing anyone needs, not the first. */
-function AccountFooter({ user, path, rail }: { user: SessionUser; path: string; rail: boolean }) {
-  const on = path === "/account";
-  const hide = rail ? HIDES : "whitespace-nowrap";
+// Deliberately NOT navigation: links live in the rail and the drawer and
+// nowhere else. Put module links up here and this becomes the horizontal
+// top-nav that was rejected on purpose.
+function TopBar({ user, path, onMenu }: { user: SessionUser; path: string; onMenu: () => void }) {
+  const onAccount = path === "/account";
 
   return (
-    <div className="shrink-0 border-t border-rail-line px-2 py-2">
-      <Link
-        href="/account"
-        aria-current={on ? "page" : undefined}
-        className={`flex items-center gap-3 rounded-[5px] px-1.5 py-1.5 transition-colors ${
-          on ? "bg-rail-hover" : "hover:bg-rail-hover/60"
-        }`}
+    <header className="no-print fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-1 border-b border-rail-line bg-rail pl-1 pr-2 sm:pr-3">
+      <button
+        type="button"
+        onClick={onMenu}
+        aria-label="Open menu"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[5px] text-rail-fg transition-colors hover:bg-rail-hover hover:text-white lg:hidden"
       >
-        <span
-          aria-hidden
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rail-hover text-[10.5px] font-semibold uppercase text-rail-fg"
-        >
-          {user.username.slice(0, 2)}
-        </span>
-        <span className={`min-w-0 leading-tight ${hide}`}>
-          <span className="block truncate text-[12.5px] font-medium text-white">{user.name ?? user.username}</span>
-          <span className="block truncate text-[10.5px] text-rail-fg">
-            {user.role === "ADMIN" ? "Administrator" : "User"}
-          </span>
-        </span>
-      </Link>
+        <Icon name="menu" />
+      </button>
 
-      <form action={logout}>
-        <button
-          className={`${ITEM} mt-px w-full text-[12.5px] text-rail-fg transition-colors hover:bg-rail-hover/60 hover:text-white`}
+      <Brand rail={false} />
+
+      <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <Link
+          href="/account"
+          aria-current={onAccount ? "page" : undefined}
+          className={`flex h-10 items-center gap-2 rounded-[5px] px-1.5 transition-colors ${
+            onAccount ? "bg-rail-hover" : "hover:bg-rail-hover/60"
+          }`}
         >
-          <Icon name="signOut" />
-          <span className={hide}>Sign out</span>
-        </button>
-      </form>
-    </div>
+          <span
+            aria-hidden
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rail-line text-[10.5px] font-semibold uppercase text-rail-fg"
+          >
+            {user.username.slice(0, 2)}
+          </span>
+          <span className="hidden min-w-0 leading-tight md:block">
+            <span className="block truncate text-[12.5px] font-medium text-white">{user.name ?? user.username}</span>
+            <span className="block truncate text-[10.5px] text-rail-fg">
+              {user.role === "ADMIN" ? "Administrator" : "User"}
+            </span>
+          </span>
+        </Link>
+
+        <form action={logout}>
+          <button
+            aria-label="Sign out"
+            title="Sign out"
+            className="flex h-10 w-10 items-center justify-center rounded-[5px] text-rail-fg transition-colors hover:bg-rail-hover hover:text-white"
+          >
+            <Icon name="signOut" />
+          </button>
+        </form>
+      </div>
+    </header>
   );
 }
 
@@ -264,48 +284,21 @@ export default function SideNav({ user }: { user: SessionUser }) {
   const nav = navFor(user.role);
   const drawer = useRef<HTMLDialogElement>(null);
 
-  // Tapping a link routes the page *behind* the drawer, and nothing else would
-  // shut it, so the route change does. Runs harmlessly on a closed dialog.
+  // Nothing else would shut the drawer after a tap, so the route change does.
   useEffect(() => {
     drawer.current?.close();
   }, [path]);
 
   return (
     <>
-      <aside className="group/rail no-print fixed inset-y-0 left-0 z-30 hidden w-14 flex-col overflow-x-hidden overflow-y-auto bg-rail transition-[width] duration-200 ease-out hover:w-56 lg:flex">
-        <div className="shrink-0 border-b border-rail-line">
-          <Brand rail />
-        </div>
-        <div className="flex-1">
-          <NavList nav={nav} path={path} rail />
-        </div>
-        <AccountFooter user={user} path={path} rail />
+      <TopBar user={user} path={path} onMenu={() => drawer.current?.showModal()} />
+
+      <aside className="group/rail no-print fixed bottom-0 left-0 top-14 z-30 hidden w-14 flex-col overflow-x-hidden overflow-y-auto bg-rail transition-[width] duration-200 ease-out hover:w-56 lg:flex">
+        <NavList nav={nav} path={path} rail />
       </aside>
 
-      {/* Small screens: a bar that stays put, and the same list in a drawer over
-          the page. This used to be a <details> that opened in the flow and
-          pushed everything down — on a phone that shoved the thing you were
-          reading off the bottom of the screen, and the list itself was taller
-          than the viewport.
-
-          The bar is sticky so the menu is one tap away however far down the
-          quotation you have scrolled. */}
-      <div className="no-print sticky top-0 z-30 flex h-14 items-center justify-between border-b border-rail-line bg-rail pr-2 lg:hidden">
-        <Brand rail={false} />
-        <button
-          type="button"
-          onClick={() => drawer.current?.showModal()}
-          className="flex h-10 items-center gap-2 rounded-[5px] px-2.5 text-[12.5px] font-medium text-rail-fg transition-colors hover:bg-rail-hover hover:text-white"
-        >
-          <Icon name="menu" />
-          Menu
-        </button>
-      </div>
-
-      {/* A real <dialog>: the backdrop, Esc-to-close, the focus trap and the
-          inert page behind it are the browser's job, not ours. Clicking the
-          backdrop lands on the dialog itself — the panel inside fills it — which
-          is how dismissing by tapping away is one line. */}
+      {/* A real <dialog>, so the backdrop, Esc-to-close and the focus trap are
+          the browser's job. */}
       <dialog
         ref={drawer}
         aria-label="Navigation"
@@ -329,7 +322,6 @@ export default function SideNav({ user }: { user: SessionUser }) {
           <div className="flex-1 overflow-y-auto">
             <NavList nav={nav} path={path} rail={false} />
           </div>
-          <AccountFooter user={user} path={path} rail={false} />
         </div>
       </dialog>
     </>

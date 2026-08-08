@@ -3,7 +3,7 @@
 // Total -> Cartage -> G-Total Amount, so the labels are overridden below.
 import { money, qty, shortDate } from "@/lib/format";
 import { inter, poppins } from "./fonts";
-import { join, totalLines } from "./shared";
+import { docRef, docWords, join, totalLines } from "./shared";
 import type { TemplateProps } from "./types";
 
 const BLUE = "#1B7FD0";
@@ -11,9 +11,11 @@ const DEEP = "#0F4C81";
 
 export default function AlMufaddal({ doc }: TemplateProps) {
   const { company, customer, items } = doc;
-  // No Sub Total row on their sheet: "Total" is the items sum, then Cartage,
-  // then "G-Total Amount". totalLines() drops the first row when GST is 0.
+  // No "Sub Total" wording on their sheet: the items sum is labelled "Total",
+  // the charges follow, and the last row is "G-Total Amount". On a quotation
+  // there are no charges, so totalLines() prints the last row alone.
   const totals = totalLines(doc, { sub: "Total", total: "G-Total Amount" });
+  const w = docWords(doc.kind);
 
   return (
     <div className={`${inter.className} flex w-[210mm] min-h-[297mm] print:min-h-0 flex-col bg-white px-[16mm] py-[12mm] text-[#141414]`}>
@@ -56,11 +58,9 @@ export default function AlMufaddal({ doc }: TemplateProps) {
       {/* ---- title bar ---- */}
       <div className="mt-7 flex items-center justify-between px-4 py-2 text-white" style={{ backgroundColor: DEEP }}>
         <h2 className="text-[15pt] font-semibold uppercase tracking-[0.25em]" style={{ fontFamily: poppins.style.fontFamily }}>
-          Quotation
+          {w.title}
         </h2>
-        <p className="text-[12pt] font-semibold">
-          {company.code}-{doc.number}
-        </p>
+        <p className="text-[12pt] font-semibold">{docRef(doc)}</p>
       </div>
 
       {/* ---- Name / Address / Date / PO / DC stacked, like their sheet ---- */}
@@ -68,7 +68,7 @@ export default function AlMufaddal({ doc }: TemplateProps) {
         <Row label="Name" value={customer.name} strong />
         <Row label="Address" value={join([customer.address, customer.phone, customer.email]) || "—"} />
         <Row label="Date" value={shortDate(doc.date)} />
-        <Row label="Valid Until" value={shortDate(doc.validUntil)} />
+        <Row label={w.until} value={shortDate(doc.until)} />
         {doc.poNumber && <Row label="PO No." value={doc.poNumber} />}
         {doc.dcNumber && <Row label="DC #" value={doc.dcNumber} />}
       </section>

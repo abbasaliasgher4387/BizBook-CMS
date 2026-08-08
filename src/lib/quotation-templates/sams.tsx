@@ -2,7 +2,7 @@
 // left, italic serif trade lines right-aligned, address rule across the foot.
 import { money, qty, shortDate } from "@/lib/format";
 import { lora, playfair } from "./fonts";
-import { join, totalLines } from "./shared";
+import { docRef, docWords, join, totalLines } from "./shared";
 import type { TemplateProps } from "./types";
 
 const MAROON = "#7B1E2B";
@@ -11,6 +11,7 @@ const GOLD = "#B8912F";
 export default function Sams({ doc }: TemplateProps) {
   const { company, customer, items } = doc;
   const totals = totalLines(doc);
+  const w = docWords(doc.kind);
 
   return (
     <div className={`${lora.className} flex w-[210mm] min-h-[297mm] print:min-h-0 flex-col bg-white px-[15mm] py-[12mm] text-[#1a1a1a]`}>
@@ -72,10 +73,10 @@ export default function Sams({ doc }: TemplateProps) {
 
       {/* ---- title ---- */}
       <h1
-        className="mt-6 text-center text-[17pt] font-bold italic tracking-[0.3em]"
+        className="mt-6 text-center text-[17pt] font-bold uppercase italic tracking-[0.3em]"
         style={{ color: MAROON, fontFamily: playfair.style.fontFamily }}
       >
-        QUOTATION
+        {w.title}
       </h1>
 
       {/* ---- buyer (left) vs. document meta (right) ---- */}
@@ -92,9 +93,9 @@ export default function Sams({ doc }: TemplateProps) {
         </div>
         <table className="h-fit text-[10pt]">
           <tbody>
-            <MetaRow label="Quotation #" value={`${company.code}-${doc.number}`} strong />
+            <MetaRow label={w.ref} value={docRef(doc)} strong />
             <MetaRow label="Date" value={shortDate(doc.date)} />
-            <MetaRow label="Valid Until" value={shortDate(doc.validUntil)} />
+            <MetaRow label={w.until} value={shortDate(doc.until)} />
             {doc.poNumber && <MetaRow label="PO No." value={doc.poNumber} />}
             {doc.dcNumber && <MetaRow label="DC #" value={doc.dcNumber} />}
           </tbody>

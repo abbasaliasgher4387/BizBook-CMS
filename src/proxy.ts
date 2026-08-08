@@ -1,9 +1,6 @@
-// Next 16 calls this Proxy; it is the old middleware file under a new name.
-//
-// Deliberately dumb: it only asks whether a session cookie is present, so a
-// signed-out browser lands on /login instead of on a flash of empty tables.
-// Whether that cookie is genuine is decided by requireUser(), which can read
-// the database — the guard that actually matters is src/app/(app)/layout.tsx.
+// Next 16 calls this Proxy; it is middleware under a new name. It only asks
+// whether a cookie is present — whether it is genuine is decided by
+// requireUser(), and the guard that matters is src/app/(app)/layout.tsx.
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -13,11 +10,8 @@ export function proxy(request: NextRequest) {
   const hasCookie = request.cookies.has(SESSION_COOKIE);
   const onLogin = request.nextUrl.pathname === "/login";
 
-  // Only ever redirects *towards* /login. Bouncing a cookie-holder away from it
-  // looked tidy and was a trap: a cookie the database no longer recognises — a
-  // reset Supabase project, a changed AUTH_SECRET — makes requireUser() send the
-  // browser to /login and this line sent it straight back, forever, with no way
-  // to reach the page that would issue a good cookie.
+  // Only ever redirects *towards* /login. Bouncing a cookie-holder away was a
+  // trap: a cookie the database no longer recognises loops forever.
   if (!hasCookie && !onLogin) return NextResponse.redirect(new URL("/login", request.url));
 
   return NextResponse.next();

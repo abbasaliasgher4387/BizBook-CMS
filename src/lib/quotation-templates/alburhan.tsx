@@ -3,7 +3,7 @@
 // carrying NTN and GST. Ruled ledger-style table to match the formal feel.
 import { money, qty, shortDate } from "@/lib/format";
 import { inter, sourceSerif } from "./fonts";
-import { join, totalLines } from "./shared";
+import { docRef, docWords, join, totalLines } from "./shared";
 import type { TemplateProps } from "./types";
 
 const TEAL = "#1B6B63";
@@ -12,6 +12,7 @@ const NAVY = "#17325C";
 export default function AlBurhan({ doc }: TemplateProps) {
   const { company, customer, items } = doc;
   const totals = totalLines(doc);
+  const w = docWords(doc.kind);
 
   return (
     <div className={`${inter.className} flex w-[210mm] min-h-[297mm] print:min-h-0 flex-col bg-white px-[16mm] py-[12mm] text-[#151515]`}>
@@ -48,7 +49,7 @@ export default function AlBurhan({ doc }: TemplateProps) {
           className="text-[14pt] uppercase tracking-[0.5em]"
           style={{ color: TEAL, fontFamily: sourceSerif.style.fontFamily }}
         >
-          Quotation
+          {w.title}
         </h2>
         <div className="h-px flex-1" style={{ backgroundColor: TEAL }} />
       </div>
@@ -66,9 +67,9 @@ export default function AlBurhan({ doc }: TemplateProps) {
         </div>
         <div className="px-3 py-2">
           <p className="mb-1 text-[8pt] font-bold uppercase tracking-[0.2em]" style={{ color: TEAL }}>Details</p>
-          <Pair label="Quotation #" value={`${company.code}-${doc.number}`} strong />
+          <Pair label={w.ref} value={docRef(doc)} strong />
           <Pair label="Date" value={shortDate(doc.date)} />
-          <Pair label="Valid Until" value={shortDate(doc.validUntil)} />
+          <Pair label={w.until} value={shortDate(doc.until)} />
           {doc.poNumber && <Pair label="PO #" value={doc.poNumber} />}
           {doc.dcNumber && <Pair label="DC #" value={doc.dcNumber} />}
         </div>

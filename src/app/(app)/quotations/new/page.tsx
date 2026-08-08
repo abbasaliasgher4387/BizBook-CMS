@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { createQuotation } from "@/app/actions";
+import DocumentForm from "@/components/document-form";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { inputDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
-import QuotationForm from "../quotation-form";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,8 @@ export default async function NewQuotationPage() {
         title="New quotation"
         subtitle="Select a company and the quotation number is assigned automatically. The quotation prints on that company's design."
       />
-      <QuotationForm
+      <DocumentForm
+        kind="QUOTATION"
         action={createQuotation}
         submitLabel="Create quotation"
         companies={companies.map((c) => ({ id: c.id, name: c.name, code: c.code }))}
@@ -58,13 +59,14 @@ export default async function NewQuotationPage() {
           companyId: companies.length === 1 ? companies[0].id : "",
           customerId: "",
           date: inputDate(today),
-          validUntil: inputDate(new Date(today.getTime() + THIRTY_DAYS_MS)),
+          until: inputDate(new Date(today.getTime() + THIRTY_DAYS_MS)),
           status: "DRAFT",
           poNumber: "",
           dcNumber: "",
           notes: "",
           terms: "",
           items: [],
+          charges: [], // quotations carry none; the form hides the panel
         }}
       />
     </>
